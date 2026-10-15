@@ -162,7 +162,7 @@ describe('چرخهٔ JSON تا ذخیره و بازگشایی', () => {
     disposeDoc(runtime.doc);
   });
 
-  it('JSON canonical را فقط پس از اعتبارسنجی سخت‌گیرانه وارد همان compiler می‌کند', () => {
+  it('JSON canonical را بدون نرمال‌سازی schema وارد compiler می‌کند و هندسهٔ قابل‌کامپایل را حفظ می‌کند', () => {
     const canonical = {
       presentation: {
         title: 'آزمایش canonical', subtitle: null, language: 'fa', theme: 'modern',
@@ -179,6 +179,7 @@ describe('چرخهٔ JSON تا ذخیره و بازگشایی', () => {
           data: { version: 1, canvas: { aspectRatio: '16:9', background: 'theme' }, elements: [
             { id: 'rect-a', type: 'rounded-rectangle', x: 0.1, y: 0.1, w: 0.35, h: 0.25, zIndex: 1, style: { fill: '#e4e4e4' }, content: {} },
             { id: 'text-a', type: 'text', x: 0.15, y: 0.15, w: 0.25, h: 0.1, zIndex: 2, style: { color: '#0b0b0b', fontSize: 18 }, content: { text: 'سلام دنیا' } },
+            { id: 'line-a', type: 'line', x: 0.1, y: 0.5, w: 0.3, h: 0, zIndex: 3, style: { stroke: '#0b0b0b' }, content: {} },
           ] }, caption: null,
         },
         speakerNotes: 'یادداشت', durationSeconds: 45, psychologicalPurpose: 'explain',
@@ -192,11 +193,16 @@ describe('چرخهٔ JSON تا ذخیره و بازگشایی', () => {
     expect(result.presentation?.slides).toHaveLength(1);
     expect(result.presentation?.slides[0].elements.some((element) => element.name === 'rect-a')).toBe(true);
     expect(result.presentation?.slides[0].elements.some((element) => element.name === 'text-a')).toBe(true);
+    expect(result.presentation?.slides[0].elements.some((element) => element.name === 'line-a')).toBe(true);
   });
 
-  it('JSON canonical با کلید اضافی را پیش از رندر رد می‌کند', () => {
-    const result = validatePresentationJson(JSON.stringify({ presentation: {}, slides: [], recapSlides: [], mode: 'teaching' }));
-    expect(result.presentation).toBeNull();
-    expect(result.error).toContain('canonical');
+  it('JSON canonical را بدون رد شدن به‌خاطر کلیدهای metadata اضافی به compiler می‌سپارد', () => {
+    const result = validatePresentationJson(JSON.stringify({
+      presentation: { title: 'آزمایش', extraMetadata: true },
+      slides: [{ layout: 'content', title: 'اسلاید بدون visual', body: { lead: 'متن' }, visual: { type: 'none', data: {}, caption: null } }],
+      recapSlides: [], mode: 'teaching',
+    }));
+    expect(result.error).toBeNull();
+    expect(result.presentation?.slides).toHaveLength(1);
   });
 });
