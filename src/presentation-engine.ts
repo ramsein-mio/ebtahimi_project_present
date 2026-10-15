@@ -15,7 +15,6 @@ import {
 import { tableCellBody } from './editor/table-model';
 import { convertReferenceDeck, isReferenceDeck } from './deck-json';
 import type { ValidationResult } from './types';
-import { parseCanonicalPresentation } from './canonical-presentation';
 
 export interface TextElementInfo {
   id: ElementId;
@@ -79,23 +78,13 @@ export function validatePresentationJson(source: string): ValidationResult {
       throw new Error('ریشه باید یک شیء باشد.');
     }
     const rootRecord = isRecordValue(value) ? value : null;
-    const canonical = rootRecord !== null && ('recapSlides' in rootRecord || (Object.keys(rootRecord).length === 3 && ['presentation', 'slides', 'recapSlides'].every((key) => key in rootRecord)));
-    let canonicalTitle: string | undefined;
-    if (canonical) {
-      const checked = parseCanonicalPresentation(source);
-      if (!checked.valid || !checked.value) {
-        const first = checked.errors[0];
-        throw new Error(first ? `JSON canonical نامعتبر در ${first.path}: ${first.message}` : 'JSON canonical نامعتبر است.');
-      }
-      canonicalTitle = checked.value.presentation.title;
-      value = {
-        presentation: checked.value.presentation,
-        slides: checked.value.slides.map((slide) => ({
-          ...slide,
-          visual: slide.visual.type === 'none' ? undefined : slide.visual,
-        })),
-      };
-    }
+    const canonical = rootRecord !== null && (
+      'recapSlides' in rootRecord ||
+      (Object.keys(rootRecord).length === 3 && ['presentation', 'slides', 'recapSlides'].every((key) => key in rootRecord))
+    );
+    // Keep the supplied JSON intact. The compiler/converter owns interpretation;
+    // strict canonical-schema validation and visual-data rewriting are intentionally
+    // not part of this import path.
     const converted = isReferenceDeck(value) ? convertReferenceDeck(value) : null;
     const candidate = (converted?.presentation ?? value) as Partial<Presentation>;
     if (!Number.isFinite(candidate.width) || Number(candidate.width) <= 0) {
@@ -124,7 +113,7 @@ export function validatePresentationJson(source: string): ValidationResult {
     return {
       presentation,
       error: null,
-      suggestedTitle: canonicalTitle ?? converted?.title,
+      suggestedTitle: converted?.title,
       inputFormat: canonical || converted ? 'reference' : 'web-ppt',
     };
   } catch (error) {
