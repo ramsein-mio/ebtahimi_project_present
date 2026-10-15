@@ -1799,3 +1799,34 @@ button.resize-handle { pointer-events: auto; cursor: nwse-resize; }
   .editor-workspace { height: calc(100dvh - 90px); }
   .slide-navigator, .editor-properties { top: 90px; }
 }
+
+
+/* Keep the properties drawer compact on phones so the slide remains visible. */
+@media (max-width: 680px) {
+  .editor-properties {
+    inset-inline-start: auto;
+    inset-inline-end: 0;
+    width: min(78vw, 360px);
+    max-width: calc(100vw - 72px);
+    box-shadow: -14px 0 36px rgba(35, 27, 46, .22);
+    overscroll-behavior: contain;
+  }
+
+  .editor-properties.is-open {
+    transform: translateX(0);
+  }
+
+  .editor-properties .properties-header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #fff;
+  }
+}
+
+@media (max-width: 380px) {
+  .editor-properties {
+    width: min(82vw, 320px);
+    max-width: calc(100vw - 54px);
+  }
+}
