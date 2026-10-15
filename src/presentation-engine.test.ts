@@ -161,4 +161,42 @@ describe('چرخهٔ JSON تا ذخیره و بازگشایی', () => {
     if (image?.kind === 'image') expect(image.src.startsWith('data:image/png;base64,')).toBe(true);
     disposeDoc(runtime.doc);
   });
+
+  it('JSON canonical را فقط پس از اعتبارسنجی سخت‌گیرانه وارد همان compiler می‌کند', () => {
+    const canonical = {
+      presentation: {
+        title: 'آزمایش canonical', subtitle: null, language: 'fa', theme: 'modern',
+        targetAudience: 'students', estimatedTotalDurationSeconds: 45,
+        learningObjectives: ['درک مفهوم'], coverageChecklist: [],
+        teachingRoadmap: [],
+      },
+      slides: [{
+        id: 'slide-01', order: 1, section: 'Introduction', layout: 'content',
+        title: 'ترکیب بصری', subtitle: null,
+        body: { lead: 'متن فارسی', bullets: [{ text: 'جزء مهم', details: 'توضیحات بیشتر' }], emphasis: '' },
+        visual: {
+          type: 'shape-composition',
+          data: { version: 1, canvas: { aspectRatio: '16:9', background: 'theme' }, elements: [
+            { id: 'rect-a', type: 'rounded-rectangle', x: 0.1, y: 0.1, w: 0.35, h: 0.25, zIndex: 1, style: { fill: '#e4e4e4' }, content: {} },
+            { id: 'text-a', type: 'text', x: 0.15, y: 0.15, w: 0.25, h: 0.1, zIndex: 2, style: { color: '#0b0b0b', fontSize: 18 }, content: { text: 'سلام دنیا' } },
+          ] }, caption: null,
+        },
+        speakerNotes: 'یادداشت', durationSeconds: 45, psychologicalPurpose: 'explain',
+        cognitiveLoad: 'medium', sourceReference: '',
+      }],
+      recapSlides: [],
+    };
+    const result = validatePresentationJson(JSON.stringify(canonical));
+    expect(result.error).toBeNull();
+    expect(result.suggestedTitle).toBe('آزمایش canonical');
+    expect(result.presentation?.slides).toHaveLength(1);
+    expect(result.presentation?.slides[0].elements.some((element) => element.name === 'rect-a')).toBe(true);
+    expect(result.presentation?.slides[0].elements.some((element) => element.name === 'text-a')).toBe(true);
+  });
+
+  it('JSON canonical با کلید اضافی را پیش از رندر رد می‌کند', () => {
+    const result = validatePresentationJson(JSON.stringify({ presentation: {}, slides: [], recapSlides: [], mode: 'teaching' }));
+    expect(result.presentation).toBeNull();
+    expect(result.error).toContain('canonical');
+  });
 });
