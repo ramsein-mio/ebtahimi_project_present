@@ -78,7 +78,8 @@ export function validatePresentationJson(source: string): ValidationResult {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       throw new Error('ریشه باید یک شیء باشد.');
     }
-    const canonical = isRecordValue(value) && ('recapSlides' in value || (Object.keys(value).length === 3 && ['presentation', 'slides', 'recapSlides'].every((key) => key in value)));
+    const rootRecord = isRecordValue(value) ? value : null;
+    const canonical = rootRecord !== null && ('recapSlides' in rootRecord || (Object.keys(rootRecord).length === 3 && ['presentation', 'slides', 'recapSlides'].every((key) => key in rootRecord)));
     let canonicalTitle: string | undefined;
     if (canonical) {
       const checked = parseCanonicalPresentation(source);
