@@ -863,6 +863,67 @@ function renderGrid(
   });
 }
 
+function renderShapeComposition(
+  visual: Record<string, unknown>,
+  elements: SlideElement[],
+  frame: { x: number; y: number; w: number; h: number },
+): void {
+  const data = isRecord(visual.data) ? visual.data : {};
+  if (!Array.isArray(data.elements)) return;
+  const source = data.elements
+    .map((element, index) => ({ element, index }))
+    .filter((item) => isRecord(item.element))
+    .sort((a, b) => {
+      const az = typeof a.element.zIndex === 'number' ? a.element.zIndex : 0;
+      const bz = typeof b.element.zIndex === 'number' ? b.element.zIndex : 0;
+      return az - bz || a.index - b.index;
+    });
+  for (const { element: raw, index } of source) {
+    const item = raw as Record<string, unknown>;
+    const type = typeof item.type === 'string' ? item.type : '';
+    const num = (key: string, fallback = 0) => typeof item[key] === 'number' && Number.isFinite(item[key]) ? Number(item[key]) : fallback;
+    const x = frame.x + num('x') * frame.w;
+    const y = frame.y + num('y') * frame.h;
+    const w = Math.max(1, num('w', 0.01) * frame.w);
+    const h = Math.max(1, num('h', 0.01) * frame.h);
+    const style = isRecord(item.style) ? item.style : {};
+    const content = isRecord(item.content) ? item.content : {};
+    const fill = typeof style.fill === 'string' && style.fill !== 'none' ? style.fill : COLORS.soft;
+    const strokeColor = typeof style.stroke === 'string' ? style.stroke : COLORS.foreground;
+    const stroke = style.stroke === 'none' ? null : ({ color: strokeColor, width: typeof style.strokeWidth === 'number' ? style.strokeWidth : 1, dash: null } satisfies Stroke);
+    let path: string | null = rectPath(w, h);
+    let shapeFill: Fill | null = style.fill === 'none' ? null : { type: 'solid', color: fill };
+    if (type === 'circle' || type === 'ellipse' || type === 'ring') {
+      const rx = w / 2, ry = h / 2;
+      path = `M ${rx} 0 A ${rx} ${ry} 0 1 0 ${rx} ${h} A ${rx} ${ry} 0 1 0 ${rx} 0 Z`;
+      if (type === 'ring') shapeFill = null;
+    } else if (type === 'rounded-rectangle' || type === 'pill') {
+      path = roundedRectPath(w, h, type === 'pill' ? h / 2 : Math.min(18, h / 5));
+    } else if (type === 'triangle') {
+      path = `M ${w / 2} 0 L ${w} ${h} L 0 ${h} Z`;
+    } else if (type === 'diamond') {
+      path = `M ${w / 2} 0 L ${w} ${h / 2} L ${w / 2} ${h} L 0 ${h / 2} Z`;
+    } else if (type === 'line' || type === 'connector' || type === 'arrow') {
+      path = `M 0 ${h / 2} L ${w} ${h / 2}`;
+      shapeFill = null;
+    } else if (type === 'polygon' && Array.isArray(item.points)) {
+      const points = item.points.filter((p): p is Record<string, unknown> => isRecord(p));
+      if (points.length >= 3) path = points.map((p, i) => `${i ? 'L' : 'M'} ${(typeof p.x === 'number' ? p.x : 0) * w} ${(typeof p.y === 'number' ? p.y : 0) * h}`).join(' ') + ' Z';
+    } else if (!['rectangle','rounded-rectangle','pill','circle','ellipse','ring','triangle','diamond','line','connector','arrow','polygon','text','image','bracket','arc'].includes(type)) {
+      path = rectPath(w, h);
+    }
+    const rawText = typeof content.text === 'string' ? content.text : typeof content.value === 'string' ? content.value : typeof item.text === 'string' ? item.text : '';
+    const isText = type === 'text' || rawText.length > 0;
+    const text = isText ? textBody(rawText, typeof style.fontSize === 'number' ? style.fontSize : 16,
+      typeof style.color === 'string' ? style.color : COLORS.foreground,
+      style.textAlign === 'left' || style.textAlign === 'center' ? style.textAlign : 'right',
+      style.fontWeight === 'bold') : null;
+    const shapeElement = shape(x, y, w, h, type === 'text' ? null : path, type === 'text' ? null : shapeFill, stroke, text, typeof item.id === 'string' ? item.id : `composition-element-${index}`);
+    shapeElement.rot = num('rotation');
+    elements.push(shapeElement);
+  }
+}
+
 function addVisual(
   source: ReferenceSlideInput,
   elements: SlideElement[],
@@ -879,6 +940,7 @@ function addVisual(
     case 'pie-chart': renderPieChart(visual, elements, frame); break;
     case 'comparison-grid': renderGrid(visual, elements, frame, true); break;
     case 'table': renderGrid(visual, elements, frame, false); break;
+    case 'shape-composition': renderShapeComposition(visual, elements, frame); break;
   }
 }
 
