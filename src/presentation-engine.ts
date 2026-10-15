@@ -36,7 +36,11 @@ export interface SlideElementInfo {
   topLevel: boolean;
 }
 
-function isRecordValue(value: unknown): value is Record<string, unknown> {\n  return typeof value === 'object' && value !== null && !Array.isArray(value);\n}\n\nfunction persianError(error: unknown): string {
+function isRecordValue(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function persianError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   if (/[\u0600-\u06ff]/.test(message)) return message;
   if (message.includes('JSON')) return `ساختار JSON معتبر نیست: ${message}`;
