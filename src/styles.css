@@ -1659,3 +1659,143 @@ button.resize-handle { pointer-events: auto; cursor: nwse-resize; }
     transition: none;
   }
 }
+
+
+/* Mobile-first layout fixes (dashboard, JSON import, editor, and viewer). */
+@media (max-width: 680px) {
+  html, body, #root { min-width: 320px; width: 100%; }
+  body { overflow-x: clip; }
+
+  /* Dashboard */
+  .dashboard-shell { display: block; min-height: 100dvh; }
+  .dashboard-main { width: 100%; min-width: 0; }
+  .dashboard-header { gap: 9px; padding: 12px; }
+  .mobile-menu { flex: 0 0 40px; width: 40px; height: 40px; }
+  .notification-button { flex: 0 0 40px; width: 40px; height: 40px; }
+  .create-button { min-width: 40px; width: 40px; padding: 0; }
+  .search-field { min-width: 0; flex-basis: 100%; width: 100%; height: 42px; }
+  .dashboard-content { padding: 24px 14px calc(36px + env(safe-area-inset-bottom)); }
+  .dashboard-heading { align-items: flex-start; gap: 10px; }
+  .dashboard-heading h1 { font-size: 21px; line-height: 1.5; }
+  .dashboard-heading > span { flex: 0 0 auto; }
+  .presentation-grid { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .presentation-card, .presentation-meta > div:first-child { min-width: 0; }
+  .presentation-meta h2 { white-space: normal; overflow-wrap: anywhere; line-height: 1.6; }
+  .empty-library { min-height: 300px; padding: 24px 16px; }
+  .dashboard-sidebar { width: min(300px, 88vw); padding-top: max(22px, env(safe-area-inset-top)); padding-bottom: max(20px, env(safe-area-inset-bottom)); }
+  .sidebar-account-details { min-width: 0; }
+  .sidebar-account-details strong, .sidebar-account-details small { overflow-wrap: anywhere; }
+
+  /* JSON import: stack cleanly and keep editor controls reachable. */
+  .json-page { min-height: 100dvh; }
+  .json-header { min-height: 62px; height: auto; gap: 10px; padding: 10px 12px; }
+  .json-header .brand { font-size: 18px; gap: 7px; }
+  .json-header .brand__mark { width: 29px; height: 29px; }
+  .back-button { min-height: 40px; max-width: 58%; white-space: nowrap; padding-inline: 10px; }
+  .json-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; padding: 25px 12px calc(32px + env(safe-area-inset-bottom)); }
+  .json-intro h1 { margin: 16px 0 12px; font-size: clamp(29px, 8vw, 37px); line-height: 1.35; }
+  .json-intro > p { font-size: 13px; line-height: 1.9; }
+  .schema-card { margin-top: 20px; overflow-x: auto; }
+  .schema-card > div { grid-template-columns: minmax(130px, 1fr) minmax(80px, .7fr) auto; gap: 8px; font-size: 10px; }
+  .json-workbench { min-width: 0; padding: 0 10px 14px; border-radius: 14px; }
+  .json-workbench-header { margin-inline: -10px; padding: 10px; min-height: 54px; gap: 8px; flex-wrap: wrap; }
+  .json-tools { display: flex; gap: 5px; min-width: 0; }
+  .json-tools button { min-height: 34px; font-size: 10px; white-space: nowrap; }
+  .json-tools button svg { display: inline-block; width: 14px; height: 14px; }
+  .title-field { margin-block: 16px 12px; }
+  .json-editor-shell { height: min(52dvh, 420px); min-height: 230px; grid-template-columns: 31px minmax(0, 1fr); }
+  .line-numbers span { padding-inline-end: 7px; font-size: 10px; }
+  .json-editor-shell textarea { min-width: 0; padding: 12px 10px; font-size: 11px; }
+  .json-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .json-actions button { min-height: 44px; }
+
+  /* Editor: stable viewport, scrollable tool strip, and off-canvas panels. */
+  .editor-shell { height: 100dvh; min-height: 0; overflow: hidden; }
+  .editor-app-header { height: 58px; min-height: 58px; padding: 6px 8px; gap: 8px; }
+  .editor-document-block { flex: 1 1 auto; min-width: 0; gap: 5px; }
+  .editor-document-copy { min-width: 0; flex: 1 1 auto; }
+  .editor-title-line { min-width: 0; }
+  .editor-title-line input { width: 100%; max-width: 100%; min-width: 0; font-size: 12px; }
+  .editor-header-actions { flex: 0 0 auto; gap: 5px; }
+  .header-present-button { display: inline-flex; width: 35px; min-width: 35px; min-height: 35px; padding: 0; overflow: hidden; font-size: 0; gap: 0; }
+  .header-present-button svg { flex: 0 0 auto; }
+  .header-save-button { width: 35px; min-width: 35px; min-height: 35px; }
+  .local-account { display: none; }
+  .editor-format-toolbar { height: 46px; min-height: 46px; padding: 5px 6px; gap: 3px; overflow-x: auto; overflow-y: visible; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+  .editor-format-toolbar::-webkit-scrollbar { display: none; }
+  .editor-format-toolbar .toolbar-group { flex: 0 0 auto; }
+  .editor-format-toolbar .mobile-panel-tools { display: flex; }
+  .editor-format-toolbar .toolbar-text-controls { display: none !important; }
+  .editor-format-toolbar .toolbar-alignment { display: none !important; }
+  .editor-format-toolbar .toolbar-spacer { flex: 0 0 8px; }
+  .editor-format-toolbar .toolbar-text-button { display: none; }
+  .editor-format-toolbar .zoom-toolbar { display: flex; }
+  .editor-format-toolbar .zoom-toolbar select { width: 58px; }
+  .editor-format-toolbar .toolbar-add-slide { min-height: 31px; }
+  .editor-format-toolbar .editor-tool-icon,
+  .editor-format-toolbar .toolbar-letter,
+  .editor-format-toolbar .toolbar-color { flex: 0 0 32px; width: 32px; height: 32px; }
+  .editor-workspace { display: block; width: 100%; height: calc(100dvh - 104px); min-height: 0; overflow: hidden; }
+  .editor-center { width: 100%; height: 100%; min-width: 0; min-height: 0; }
+  .editor-stage-viewport { width: 100%; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+  .editor-stage-pad { min-width: 100%; width: max-content; min-height: 100%; padding: 20px 14px; place-items: center; }
+  .slide-canvas { min-width: 0; flex: 0 0 auto; }
+  .canvas-status-bar { min-height: 28px; gap: 8px; font-size: 9px; }
+  .slide-navigator { position: fixed; z-index: 120; top: 104px; bottom: 0; left: 0; width: min(250px, 82vw); max-height: none; transform: translateX(-105%); padding-bottom: env(safe-area-inset-bottom); }
+  .slide-navigator.is-open { transform: translateX(0); }
+  .editor-properties { position: fixed; z-index: 130; top: 104px; right: 0; bottom: 0; width: min(340px, 92vw); max-height: none; overflow-y: auto; transform: translateX(103%); padding-bottom: env(safe-area-inset-bottom); }
+  .editor-properties.is-open { transform: translateX(0); }
+  .properties-mobile-close { display: grid; }
+  .speaker-notes.is-open { height: 110px; }
+  .speaker-notes textarea { max-height: 70px; }
+  .insert-dialog { width: calc(100vw - 20px); max-width: 520px; max-height: calc(100dvh - 20px); padding: 14px; gap: 14px; }
+  .insert-dialog-fields { grid-template-columns: minmax(0, 1fr); }
+  .chart-type-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .editor-dialog-backdrop { padding: 10px; }
+  .editor-toast { inset-inline: 12px; bottom: max(12px, env(safe-area-inset-bottom)); justify-content: center; }
+
+  /* Viewer: two compact control rows, more room for the actual slide. */
+  .viewer-root { height: 100dvh; min-height: 0; }
+  .viewer-topbar { display: flex; flex-direction: column; align-items: stretch; gap: 7px; padding: max(8px, env(safe-area-inset-top)) 9px 7px; }
+  .viewer-brand { flex: 0 0 auto; width: 100%; min-height: 25px; }
+  .viewer-brand-text { max-width: calc(100vw - 42px); font-size: 12px; }
+  .viewer-tools { width: 100%; min-width: 0; flex: 0 0 auto; gap: 5px; overflow-x: auto; overflow-y: hidden; padding-bottom: 2px; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .viewer-tools::-webkit-scrollbar { display: none; }
+  .viewer-btn { flex: 0 0 34px; min-width: 34px; width: 34px; height: 34px; padding: 0; }
+  .viewer-btn svg { width: 17px; height: 17px; }
+  .viewer-zoomtag { flex: 0 0 38px; min-width: 38px; font-size: 10px; }
+  .viewer-stage { min-height: 0; touch-action: pan-y; }
+  .viewer-viewport { inset: 6px 0; }
+  .viewer-bottombar { grid-template-columns: 38px minmax(0, 1fr) 38px; gap: 7px; padding: 8px 9px max(8px, env(safe-area-inset-bottom)); }
+  .viewer-nav-btn { width: 38px; min-width: 38px; height: 38px; padding: 0; }
+  .viewer-center { gap: 6px; }
+  .viewer-meta { font-size: 10px; }
+  .viewer-overview { grid-template-columns: minmax(0, 1fr); gap: 8px; padding: max(58px, calc(58px + env(safe-area-inset-top))) 12px max(70px, calc(70px + env(safe-area-inset-bottom))); }
+  .viewer-overview-card { min-height: 78px; padding: 10px 12px; }
+  .viewer-theme-panel { top: max(100px, calc(100px + env(safe-area-inset-top))); inset-inline: 10px; width: auto; max-height: calc(100dvh - 125px); }
+  .viewer-detail-modal, .viewer-qr-modal { padding: 10px; }
+  .viewer-detail-card, .viewer-qr-card { width: 100%; max-height: calc(100dvh - 20px); padding: 18px 14px; border-radius: 13px; box-shadow: 5px 5px 0 var(--v-soft2); }
+  .viewer-detail-card h3 { padding-inline-end: 30px; font-size: 16px; }
+  .viewer-qr-canvas-wrap { max-width: 100%; padding: 8px; }
+  .viewer-qr-canvas-wrap canvas { width: min(240px, 62vw); }
+}
+
+@media (max-width: 380px) {
+  .dashboard-heading h1 { font-size: 19px; }
+  .json-header .back-button { font-size: 10px; padding-inline: 7px; }
+  .json-tools button { font-size: 9px; padding-inline: 6px; }
+  .editor-title-line input { font-size: 11px; }
+  .editor-format-toolbar .toolbar-group { gap: 1px; padding-inline: 2px; }
+  .viewer-topbar { padding-inline: 7px; }
+  .viewer-bottombar { padding-inline: 7px; }
+}
+
+@media (max-height: 520px) and (max-width: 900px) {
+  .viewer-topbar { padding-block: 5px; }
+  .viewer-brand { display: none; }
+  .viewer-bottombar { padding-block: 5px; }
+  .editor-app-header { height: 50px; min-height: 50px; }
+  .editor-format-toolbar { height: 40px; min-height: 40px; }
+  .editor-workspace { height: calc(100dvh - 90px); }
+  .slide-navigator, .editor-properties { top: 90px; }
+}
