@@ -1,0 +1,54 @@
+import { useEffect, useState } from 'react';
+import { Dashboard } from './pages/Dashboard';
+import { JsonInput } from './pages/JsonInput';
+import { EditorPage } from './pages/Editor';
+import { ViewerPage } from './ViewerPage';
+import { getStoredPresentation } from './storage';
+import type { Route } from './types';
+
+function readRoute(): Route {
+  const hash = window.location.hash.replace(/^#\/?/, '');
+  if (hash === 'new') return { page: 'json' };
+  if (hash.startsWith('editor/')) return { page: 'editor', id: decodeURIComponent(hash.slice(7)) };
+  if (hash.startsWith('viewer/')) return { page: 'viewer', id: decodeURIComponent(hash.slice(7)) };
+  return { page: 'dashboard' };
+}
+
+function navigate(hash: string): void {
+  window.location.hash = hash;
+}
+
+export default function App() {
+  const [route, setRoute] = useState<Route>(readRoute);
+
+  useEffect(() => {
+    document.documentElement.lang = 'fa';
+    document.documentElement.dir = 'rtl';
+    const update = () => setRoute(readRoute());
+    window.addEventListener('hashchange', update);
+    return () => window.removeEventListener('hashchange', update);
+  }, []);
+
+  if (route.page === 'json') {
+    return <JsonInput onBack={() => navigate('dashboard')} onGenerated={(id) => navigate(`editor/${encodeURIComponent(id)}`)} />;
+  }
+  if (route.page === 'editor') {
+    return <EditorPage id={route.id} onBack={() => navigate('dashboard')} onPresent={() => navigate(`viewer/${encodeURIComponent(route.id)}`)} />;
+  }
+  if (route.page === 'viewer') {
+    const record = getStoredPresentation(route.id);
+    if (!record) {
+      return <Dashboard onCreate={() => navigate('new')} onOpen={(id) => navigate(`viewer/${encodeURIComponent(id)}`)} onEdit={(id) => navigate(`editor/${encodeURIComponent(id)}`)} />;
+    }
+    return (
+      <ViewerPage
+        id={record.id}
+        title={record.title}
+        presentation={record.presentation}
+        onBack={() => navigate('dashboard')}
+        onEdit={() => navigate(`editor/${encodeURIComponent(record.id)}`)}
+      />
+    );
+  }
+  return <Dashboard onCreate={() => navigate('new')} onOpen={(id) => navigate(`viewer/${encodeURIComponent(id)}`)} onEdit={(id) => navigate(`editor/${encodeURIComponent(id)}`)} />;
+}

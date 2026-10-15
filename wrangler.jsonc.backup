@@ -1,0 +1,15 @@
+{
+	"name": "pardis-present",
+	"compatibility_date": "2026-10-14",
+	"assets": {
+		"directory": "./dist",
+		"not_found_handling": "single-page-application"
+	},
+	"d1_databases": [
+		{
+			"binding": "pardis_present_db",
+			"database_name": "pardis-present-db",
+			"database_id": "090cc118-565c-4eed-8012-48e90186850d"
+		}
+	]
+}
