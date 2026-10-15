@@ -359,6 +359,9 @@ export function hasValidVisual(visual: unknown): boolean {
       const rows = data.rows;
       return Array.isArray(columns) && columns.length > 0 && Array.isArray(rows) && rows.length > 0;
     }
+    case 'shape-composition': {
+      return Array.isArray(data.elements) && data.elements.some(isRecord);
+    }
     case 'table': {
       const headers = data.headers;
       const rows = data.rows;
