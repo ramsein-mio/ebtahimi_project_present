@@ -15,6 +15,7 @@ import {
 import { tableCellBody } from './editor/table-model';
 import { convertReferenceDeck, isReferenceDeck } from './deck-json';
 import type { ValidationResult } from './types';
+import { parseCanonicalPresentation } from './canonical-presentation';
 
 export interface TextElementInfo {
   id: ElementId;
@@ -35,7 +36,7 @@ export interface SlideElementInfo {
   topLevel: boolean;
 }
 
-function persianError(error: unknown): string {
+function isRecordValue(value: unknown): value is Record<string, unknown> {\n  return typeof value === 'object' && value !== null && !Array.isArray(value);\n}\n\nfunction persianError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   if (/[\u0600-\u06ff]/.test(message)) return message;
   if (message.includes('JSON')) return `ساختار JSON معتبر نیست: ${message}`;
@@ -73,6 +74,23 @@ export function validatePresentationJson(source: string): ValidationResult {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       throw new Error('ریشه باید یک شیء باشد.');
     }
+    const canonical = isRecordValue(value) && ('recapSlides' in value || (Object.keys(value).length === 3 && ['presentation', 'slides', 'recapSlides'].every((key) => key in value)));
+    let canonicalTitle: string | undefined;
+    if (canonical) {
+      const checked = parseCanonicalPresentation(source);
+      if (!checked.valid || !checked.value) {
+        const first = checked.errors[0];
+        throw new Error(first ? `JSON canonical نامعتبر در ${first.path}: ${first.message}` : 'JSON canonical نامعتبر است.');
+      }
+      canonicalTitle = checked.value.presentation.title;
+      value = {
+        presentation: checked.value.presentation,
+        slides: checked.value.slides.map((slide) => ({
+          ...slide,
+          visual: slide.visual.type === 'none' ? undefined : slide.visual,
+        })),
+      };
+    }
     const converted = isReferenceDeck(value) ? convertReferenceDeck(value) : null;
     const candidate = (converted?.presentation ?? value) as Partial<Presentation>;
     if (!Number.isFinite(candidate.width) || Number(candidate.width) <= 0) {
@@ -101,8 +119,8 @@ export function validatePresentationJson(source: string): ValidationResult {
     return {
       presentation,
       error: null,
-      suggestedTitle: converted?.title,
-      inputFormat: converted ? 'reference' : 'web-ppt',
+      suggestedTitle: canonicalTitle ?? converted?.title,
+      inputFormat: canonical || converted ? 'reference' : 'web-ppt',
     };
   } catch (error) {
     return { presentation: null, error: persianError(error) };
