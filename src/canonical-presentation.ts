@@ -2,17 +2,31 @@ export type CognitiveLoad = 'low' | 'medium' | 'high';
 export type RichTextLine = string | { text: string; details: string };
 export interface CoverageChecklistItem { item: string; slideIds: string[] }
 export interface TeachingRoadmapItem { section: string; slideIds: string[]; purpose: string }
+export interface RenderTheme {
+  background?: string; foreground?: string; muted?: string; surface?: string;
+  border?: string; highlight?: string; palette?: string[];
+  fontFamily?: string | string[];
+}
+export interface RenderCanvas {
+  width?: number; height?: number; aspectRatio?: string; background?: string;
+  fullscreen?: boolean; mode?: string;
+}
 export interface CanonicalSlide {
   id: string; order: number; section: string; layout: string; title: string;
   subtitle: string | null;
   body: { lead: RichTextLine; bullets: RichTextLine[]; emphasis: RichTextLine };
   visual: { type: string; data: Record<string, unknown>; caption: string | null };
+  background?: string | { color?: string };
+  theme?: RenderTheme;
   speakerNotes: string; durationSeconds: number; psychologicalPurpose: string;
   cognitiveLoad: CognitiveLoad; sourceReference: string;
 }
 export interface CanonicalPresentation {
+  theme?: RenderTheme;
+  canvas?: RenderCanvas;
   presentation: {
     title: string; subtitle: string | null; language: string; theme: string;
+    design?: RenderTheme; canvas?: RenderCanvas; background?: string;
     targetAudience: string; estimatedTotalDurationSeconds: number;
     learningObjectives: string[]; coverageChecklist: CoverageChecklistItem[];
     teachingRoadmap: TeachingRoadmapItem[];
@@ -28,16 +42,30 @@ export interface CanonicalValidationResult {
   valid: boolean; value: CanonicalPresentation | null; errors: ValidationIssue[];
   warnings: ValidationIssue[];
 }
-const ROOT_KEYS = ['presentation', 'slides', 'recapSlides'];
-const SLIDE_KEYS = ['id','order','section','layout','title','subtitle','body','visual','speakerNotes','durationSeconds','psychologicalPurpose','cognitiveLoad','sourceReference'];
+const ROOT_KEYS = ['presentation', 'slides', 'recapSlides', 'theme', 'canvas'];
+const SLIDE_KEYS = ['id','order','section','layout','title','subtitle','body','visual','background','theme','speakerNotes','durationSeconds','psychologicalPurpose','cognitiveLoad','sourceReference'];
 const BODY_KEYS = ['lead','bullets','emphasis'];
 const VISUAL_KEYS = ['type','data','caption'];
-const META_KEYS = ['title','subtitle','language','theme','targetAudience','estimatedTotalDurationSeconds','learningObjectives','coverageChecklist','teachingRoadmap'];
+const META_KEYS = ['title','subtitle','language','theme','design','canvas','background','targetAudience','estimatedTotalDurationSeconds','learningObjectives','coverageChecklist','teachingRoadmap'];
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const actualType = (v: unknown): string => v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v;
-function exactKeys(value: Record<string, unknown>, expected: string[], path: string, errors: ValidationIssue[]) {
-  for (const key of expected) if (!(key in value)) errors.push({ path: path ? path + '.' + key : key, message: 'Required field is missing.', expected: 'present', actual: 'missing', severity: 'error' });
+function exactKeys(value: Record<string, unknown>, expected: string[], path: string, errors: ValidationIssue[], optional: string[] = []) {
+  for (const key of expected) if (!optional.includes(key) && !(key in value)) errors.push({ path: path ? path + '.' + key : key, message: 'Required field is missing.', expected: 'present', actual: 'missing', severity: 'error' });
   for (const key of Object.keys(value)) if (!expected.includes(key)) errors.push({ path: path ? path + '.' + key : key, message: 'Unexpected field in canonical object.', expected: 'one of the canonical fields', actual: 'unexpected key', severity: 'error' });
+}
+function validateRenderTheme(value: unknown, path: string, errors: ValidationIssue[]) {
+  if (!isRecord(value)) { errors.push({ path, message: 'Theme must be an object.', expected: 'theme object', actual: actualType(value), severity: 'error' }); return; }
+  const colorKeys = ['background','foreground','muted','surface','border','highlight'];
+  for (const key of colorKeys) if (key in value && typeof value[key] !== 'string') errors.push({ path: path + '.' + key, message: 'Theme color must be a string.', expected: 'CSS color string', actual: actualType(value[key]), severity: 'error' });
+  if ('palette' in value && (!Array.isArray(value.palette) || value.palette.some((color) => typeof color !== 'string'))) errors.push({ path: path + '.palette', message: 'Palette must be an array of color strings.', expected: 'string[]', actual: actualType(value.palette), severity: 'error' });
+  if ('fontFamily' in value && !(typeof value.fontFamily === 'string' || Array.isArray(value.fontFamily) && value.fontFamily.every((font) => typeof font === 'string'))) errors.push({ path: path + '.fontFamily', message: 'Font family must be a string or string array.', expected: 'string | string[]', actual: actualType(value.fontFamily), severity: 'error' });
+}
+function validateRenderCanvas(value: unknown, path: string, errors: ValidationIssue[]) {
+  if (!isRecord(value)) { errors.push({ path, message: 'Canvas must be an object.', expected: 'canvas object', actual: actualType(value), severity: 'error' }); return; }
+  for (const key of ['width','height']) if (key in value && (typeof value[key] !== 'number' || !Number.isFinite(value[key]) || Number(value[key]) <= 0)) errors.push({ path: path + '.' + key, message: 'Canvas dimension must be positive.', expected: 'number > 0', actual: actualType(value[key]), severity: 'error' });
+  if ('aspectRatio' in value && (typeof value.aspectRatio !== 'string' || !/^\d+(?:\.\d+)?\s*:\s*\d+(?:\.\d+)?$/.test(value.aspectRatio))) errors.push({ path: path + '.aspectRatio', message: 'Aspect ratio must use W:H notation.', expected: 'e.g. 16:9', actual: actualType(value.aspectRatio), severity: 'error' });
+  if ('background' in value && typeof value.background !== 'string') errors.push({ path: path + '.background', message: 'Canvas background must be a color string.', expected: 'CSS color string', actual: actualType(value.background), severity: 'error' });
+  if ('fullscreen' in value && typeof value.fullscreen !== 'boolean') errors.push({ path: path + '.fullscreen', message: 'fullscreen must be boolean.', expected: 'boolean', actual: actualType(value.fullscreen), severity: 'error' });
 }
 function expectString(v: unknown, path: string, errors: ValidationIssue[], nonEmpty = false): v is string {
   if (typeof v !== 'string' || (nonEmpty && !v.trim())) {
@@ -79,12 +107,17 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
     errors.push({ path: '$', message: 'Canonical JSON root must be an object.', expected: 'object', actual: actualType(value), severity: 'error' });
     return { valid: false, value: null, errors, warnings };
   }
-  exactKeys(value, ROOT_KEYS, '', errors);
+  exactKeys(value, ROOT_KEYS, '', errors, ['theme','canvas']);
+  if ('theme' in value) validateRenderTheme(value.theme, 'theme', errors);
+  if ('canvas' in value) validateRenderCanvas(value.canvas, 'canvas', errors);
   const meta = value.presentation;
   if (!isRecord(meta)) errors.push({ path: 'presentation', message: 'Expected presentation metadata object.', expected: 'object', actual: actualType(meta), severity: 'error' });
   else {
-    exactKeys(meta, META_KEYS, 'presentation', errors);
+    exactKeys(meta, META_KEYS, 'presentation', errors, ['design','canvas','background']);
     for (const key of ['title','language','theme','targetAudience']) expectString(meta[key], 'presentation.' + key, errors, true);
+    if ('design' in meta) validateRenderTheme(meta.design, 'presentation.design', errors);
+    if ('canvas' in meta) validateRenderCanvas(meta.canvas, 'presentation.canvas', errors);
+    if ('background' in meta && typeof meta.background !== 'string') errors.push({ path: 'presentation.background', message: 'Background must be a color string.', expected: 'CSS color string', actual: actualType(meta.background), severity: 'error' });
     expectNullableString(meta.subtitle, 'presentation.subtitle', errors);
     if (typeof meta.estimatedTotalDurationSeconds !== 'number' || !Number.isFinite(meta.estimatedTotalDurationSeconds) || meta.estimatedTotalDurationSeconds <= 0)
       errors.push({ path: 'presentation.estimatedTotalDurationSeconds', message: 'Duration must be a positive finite number.', expected: 'number > 0', actual: actualType(meta.estimatedTotalDurationSeconds), severity: 'error' });
@@ -98,7 +131,9 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
   slides.forEach((slide, i) => {
     const p = 'slides[' + i + ']';
     if (!isRecord(slide)) { errors.push({ path: p, message: 'Slide must be an object.', expected: 'object', actual: actualType(slide), severity: 'error' }); return; }
-    exactKeys(slide, SLIDE_KEYS, p, errors);
+    exactKeys(slide, SLIDE_KEYS, p, errors, ['background','theme']);
+    if ('theme' in slide) validateRenderTheme(slide.theme, p + '.theme', errors);
+    if ('background' in slide && !(typeof slide.background === 'string' || isRecord(slide.background) && (slide.background.color === undefined || typeof slide.background.color === 'string'))) errors.push({ path: p + '.background', message: 'Slide background must be a color string or color object.', expected: 'string | { color: string }', actual: actualType(slide.background), severity: 'error' });
     for (const key of ['id','section','layout','title','speakerNotes','psychologicalPurpose','sourceReference']) expectString(slide[key], p + '.' + key, errors, key === 'id' || key === 'title');
     expectNullableString(slide.subtitle, p + '.subtitle', errors);
     if (typeof slide.id === 'string') { if (ids.has(slide.id)) errors.push({ path: p + '.id', message: 'Slide IDs must be unique.', expected: 'unique ID', actual: slide.id, severity: 'error' }); ids.add(slide.id); }
