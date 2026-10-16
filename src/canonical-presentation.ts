@@ -159,6 +159,7 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
       if (visual.type === 'shape-composition' && isRecord(visual.data)) {
         if (visual.data.version !== 1) errors.push({ path: p + '.visual.data.version', message: 'Unsupported shape composition version.', expected: '1', actual: String(visual.data.version), severity: 'error' });
         if (!isRecord(visual.data.canvas)) errors.push({ path: p + '.visual.data.canvas', message: 'Canvas must be an object.', expected: 'object', actual: actualType(visual.data.canvas), severity: 'error' });
+        else validateRenderCanvas(visual.data.canvas, p + '.visual.data.canvas', errors);
         if (!Array.isArray(visual.data.elements)) errors.push({ path: p + '.visual.data.elements', message: 'Shape elements must be an array.', expected: 'array', actual: actualType(visual.data.elements), severity: 'error' });
         else {
           const elementIds = new Set<string>();
@@ -169,6 +170,10 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
             if (typeof element.id === 'string') { if (elementIds.has(element.id)) errors.push({ path: ep + '.id', message: 'Element IDs must be unique.', expected: 'unique ID', actual: element.id, severity: 'error' }); elementIds.add(element.id); }
             expectString(element.type, ep + '.type', errors, true);
             for (const key of ['x','y','w','h']) if (typeof element[key] !== 'number' || !Number.isFinite(element[key]) || (key === 'w' || key === 'h' ? Number(element[key]) <= 0 : Number(element[key]) < 0 || Number(element[key]) > 1)) errors.push({ path: ep + '.' + key, message: 'Geometry must be finite and normalized.', expected: key === 'w' || key === 'h' ? 'number > 0' : 'number in [0, 1]', actual: actualType(element[key]), severity: 'error' });
+            if ('zIndex' in element && (typeof element.zIndex !== 'number' || !Number.isFinite(element.zIndex))) errors.push({ path: ep + '.zIndex', message: 'zIndex must be a finite number.', expected: 'finite number', actual: actualType(element.zIndex), severity: 'error' });
+            if ('rotation' in element && (typeof element.rotation !== 'number' || !Number.isFinite(element.rotation))) errors.push({ path: ep + '.rotation', message: 'rotation must be a finite number.', expected: 'finite number', actual: actualType(element.rotation), severity: 'error' });
+            if ('style' in element && !isRecord(element.style)) errors.push({ path: ep + '.style', message: 'Shape style must be an object.', expected: 'object', actual: actualType(element.style), severity: 'error' });
+            if ('content' in element && !isRecord(element.content)) errors.push({ path: ep + '.content', message: 'Shape content must be an object.', expected: 'object', actual: actualType(element.content), severity: 'error' });
           });
         }
       }
