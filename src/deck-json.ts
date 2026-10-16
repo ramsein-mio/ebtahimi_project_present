@@ -141,7 +141,10 @@ function resolveSlideTheme(deck: ReferenceDeckInput, source: ReferenceSlideInput
   const data = isRecord(visual.data) ? visual.data : {};
   const canvas = isRecord(data.canvas) ? data.canvas : {};
   const slideBackground = isRecord(source.background) ? source.background.color : source.background;
-  const background = colorString(slideBackground ?? canvas.background ?? theme.background, DEFAULT_COLORS.background);
+  const background = colorString(
+    slideBackground ?? canvas.background ?? metadata.background ?? theme.background,
+    DEFAULT_COLORS.background,
+  );
   const palette = Array.isArray(theme.palette)
     ? theme.palette.map((color) => colorString(color, '')).filter(Boolean)
     : [];
@@ -170,7 +173,7 @@ function slideBackground(source: ReferenceSlideInput, deck: ReferenceDeckInput):
   const data = isRecord(visual.data) ? visual.data : {};
   const canvas = isRecord(data.canvas) ? data.canvas : {};
   const explicit = isRecord(source.background) ? source.background.color : source.background;
-  const value = explicit ?? canvas.background ?? metadataTheme.background ?? rootTheme.background ?? COLORS.background;
+  const value = explicit ?? canvas.background ?? metadata.background ?? metadataTheme.background ?? rootTheme.background ?? COLORS.background;
   return { type: 'solid', color: colorString(value, COLORS.background) };
 }
 
@@ -1081,6 +1084,8 @@ export function validateReferenceDeck(value: unknown): asserts value is Referenc
 
 export function isReferenceDeck(value: unknown): value is ReferenceDeckInput {
   if (!isRecord(value)) return false;
+  // Canonical JSON shares presentation/slides fields but is still compiled through
+  // the same visual renderer. Its root-level render contract must remain available.
   if ('presentation' in value) return true;
   if (value.source === 'ppt' || value.source === 'pptx' || 'width' in value || 'height' in value) return false;
   return true;
