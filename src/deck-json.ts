@@ -11,11 +11,13 @@ import type {
 } from '@web-ppt/core';
 import { encodePresentationLineName } from './presentation-interactions';
 
-const WIDTH = 1280;
-const HEIGHT = 720;
-const FONT = ['Vazirmatn', 'Tahoma', 'Arial'];
+const BASE_WIDTH = 1280;
+const BASE_HEIGHT = 720;
+let ACTIVE_WIDTH = BASE_WIDTH;
+let ACTIVE_HEIGHT = BASE_HEIGHT;
+let FONT = ['Vazirmatn', 'Tahoma', 'Arial'];
 
-const COLORS = {
+const DEFAULT_COLORS = {
   background: '#ffffff',
   foreground: '#0b0b0b',
   muted: '#5c5c5c',
@@ -24,6 +26,16 @@ const COLORS = {
   highlight: '#ffe45c',
   palette: ['#3b82f6', '#f97316', '#22c55e', '#a855f7', '#ec4899', '#06b6d4'],
 } as const;
+
+let COLORS: {
+  background: string;
+  foreground: string;
+  muted: string;
+  soft: string;
+  soft2: string;
+  highlight: string;
+  palette: string[];
+} = { ...DEFAULT_COLORS, palette: [...DEFAULT_COLORS.palette] };
 
 const SECTION_LABELS: Record<string, string> = {
   Introduction: 'مقدمه',
@@ -93,6 +105,80 @@ function stringValue(value: unknown): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function colorString(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') return fallback;
+  const color = value.trim();
+  return /^(#[\da-f]{3,8}|rgba?\([\d\s.,%]+\)|hsla?\([\d\s.,%deg]+\)|transparent)$/i.test(color)
+    ? color
+    : fallback;
+}
+
+function dimensionsForDeck(value: ReferenceDeckInput): { width: number; height: number } {
+  const metadata = isRecord(value.presentation) ? value.presentation : {};
+  const canvas = isRecord(value.canvas) ? value.canvas : isRecord(metadata.canvas) ? metadata.canvas : {};
+  const width = typeof canvas.width === 'number' && Number.isFinite(canvas.width) && canvas.width > 0
+    ? canvas.width : BASE_WIDTH;
+  const height = typeof canvas.height === 'number' && Number.isFinite(canvas.height) && canvas.height > 0
+    ? canvas.height : null;
+  if (height) return { width, height };
+  const ratio = typeof canvas.aspectRatio === 'string' ? canvas.aspectRatio.match(/^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/) : null;
+  if (ratio) {
+    const aspect = Number(ratio[1]) / Number(ratio[2]);
+    if (Number.isFinite(aspect) && aspect > 0) return { width, height: width / aspect };
+  }
+  return { width, height: BASE_HEIGHT };
+}
+
+function resolveSlideTheme(deck: ReferenceDeckInput, source: ReferenceSlideInput): void {
+  const metadata = isRecord(deck.presentation) ? deck.presentation : {};
+  const rootTheme = isRecord(deck.theme) ? deck.theme : {};
+  const metadataTheme = isRecord(metadata.design) ? metadata.design : isRecord(metadata.theme) ? metadata.theme : {};
+  const slideTheme = isRecord(source.theme) ? source.theme : {};
+  const theme = { ...rootTheme, ...metadataTheme, ...slideTheme };
+  const rootCanvas = isRecord(deck.canvas) ? deck.canvas : {};
+  const metadataCanvas = isRecord(metadata.canvas) ? metadata.canvas : {};
+  const visual = isRecord(source.visual) ? source.visual : {};
+  const data = isRecord(visual.data) ? visual.data : {};
+  const canvas = isRecord(data.canvas) ? data.canvas : {};
+  const slideBackground = isRecord(source.background) ? source.background.color : source.background;
+  const background = colorString(
+    slideBackground ?? canvas.background ?? metadata.background ?? metadataCanvas.background ?? rootCanvas.background ?? theme.background,
+    DEFAULT_COLORS.background,
+  );
+  const palette = Array.isArray(theme.palette)
+    ? theme.palette.map((color) => colorString(color, '')).filter(Boolean)
+    : [];
+  const fonts = Array.isArray(theme.fontFamily)
+    ? theme.fontFamily.filter((font): font is string => typeof font === 'string' && font.trim().length > 0)
+    : typeof theme.fontFamily === 'string' && theme.fontFamily.trim()
+      ? [theme.fontFamily, 'Tahoma', 'Arial']
+      : null;
+  COLORS = {
+    background,
+    foreground: colorString(theme.foreground, DEFAULT_COLORS.foreground),
+    muted: colorString(theme.muted, DEFAULT_COLORS.muted),
+    soft: colorString(theme.surface, DEFAULT_COLORS.soft),
+    soft2: colorString(theme.border, DEFAULT_COLORS.soft2),
+    highlight: colorString(theme.highlight, DEFAULT_COLORS.highlight),
+    palette: palette.length ? palette : [...DEFAULT_COLORS.palette],
+  };
+  FONT = fonts ? [...fonts] : ['Vazirmatn', 'Tahoma', 'Arial'];
+}
+
+function slideBackground(source: ReferenceSlideInput, deck: ReferenceDeckInput): Fill {
+  const metadata = isRecord(deck.presentation) ? deck.presentation : {};
+  const rootTheme = isRecord(deck.theme) ? deck.theme : {};
+  const metadataTheme = isRecord(metadata.design) ? metadata.design : isRecord(metadata.theme) ? metadata.theme : {};
+  const rootCanvas = isRecord(deck.canvas) ? deck.canvas : {};
+  const metadataCanvas = isRecord(metadata.canvas) ? metadata.canvas : {};
+  const visual = isRecord(source.visual) ? source.visual : {};
+  const data = isRecord(visual.data) ? visual.data : {};
+  const canvas = isRecord(data.canvas) ? data.canvas : {};
+  const explicit = isRecord(source.background) ? source.background.color : source.background;
+  const value = explicit ?? canvas.background ?? metadata.background ?? metadataCanvas.background ?? rootCanvas.background ?? metadataTheme.background ?? rootTheme.background ?? COLORS.background;
+  return { type: 'solid', color: colorString(value, COLORS.background) };
 }
 
 function isLineObject(value: unknown): value is LineObject {
@@ -388,7 +474,7 @@ function isColorlessPlaceholder(element: SlideElement): boolean {
   const fillNone = !fill || fill.type === 'none' || fill.type === 'solid' && fill.color === COLORS.background;
   const strokeNone = !stroke || stroke.color === COLORS.soft2;
   const isPlaceholderName = /^(visual-frame|visual-empty|visual-placeholder|visual-caption|caption-rule)$/.test(name);
-  const isOnLeftHalf = element.x < WIDTH * .48 && element.w >= WIDTH * .4;
+  const isOnLeftHalf = element.x < ACTIVE_WIDTH * .48 && element.w >= ACTIVE_WIDTH * .4;
   return isPlaceholderName && fillNone && strokeNone && isOnLeftHalf;
 }
 
@@ -445,7 +531,8 @@ function addReferenceLine(
   if (detailWidth) detailBadge(x + 4, y + Math.max(2, (h - 20) / 2), elements);
 }
 
-function titleSlide(source: ReferenceSlideInput): Slide {
+function titleSlide(source: ReferenceSlideInput, deck: ReferenceDeckInput): Slide {
+  resolveSlideTheme(deck, source);
   const elements: SlideElement[] = [];
   const body = isRecord(source.body) ? source.body : {};
   elements.push(rectangle(592, 94, 96, 4, COLORS.foreground, 0, null, 'title-rule'));
@@ -473,7 +560,7 @@ function titleSlide(source: ReferenceSlideInput): Slide {
     addReferenceLine(elements, body.emphasis, frame, 19, { bold: true, name: 'deck-emphasis' });
   }
   return {
-    background: { type: 'solid', color: COLORS.background },
+    background: slideBackground(source, deck),
     elements: filterEmptyPlaceholders(elements),
     notes: detailsNotes(source),
     layoutName: 'Reference title',
@@ -485,7 +572,7 @@ function contentHeader(source: ReferenceSlideInput, elements: SlideElement[]): n
   const label = sectionLabel(source.section);
   const labelWidth = Math.max(74, Math.min(190, 28 + label.length * 12));
   elements.push(outlinedTextBox(
-    WIDTH - 64 - labelWidth,
+    ACTIVE_WIDTH - 64 - labelWidth,
     42,
     labelWidth,
     30,
@@ -499,7 +586,7 @@ function contentHeader(source: ReferenceSlideInput, elements: SlideElement[]): n
     'section-tag',
   ));
   elements.push(outlinedTextBox(
-    WIDTH - 64 - labelWidth - 48,
+    ACTIVE_WIDTH - 64 - labelWidth - 48,
     42,
     38,
     30,
@@ -648,7 +735,7 @@ function renderBarChart(
   values.forEach((item, index) => {
     const rowY = area.y + rowHeight * index;
     const value = Number(item.value) || 0;
-    const color = COLORS.palette[index % COLORS.palette.length];
+    const color = colorString(item.color, colorString(series[0]?.color, COLORS.palette[index % COLORS.palette.length]));
     elements.push(textBox(area.x + 100, rowY, area.w - 100, rowHeight * .42, item.label, 14, COLORS.foreground, 'right', true));
     elements.push(textBox(area.x, rowY, 92, rowHeight * .42, `${value}${isPercent ? '%' : ''}`, 14, COLORS.foreground, 'left', true));
     const trackY = rowY + rowHeight * .53;
@@ -667,6 +754,7 @@ function renderLineChart(
   const series = Array.isArray(data.series) ? data.series.filter(isRecord) : [];
   const parsed = series.map((item) => ({
     name: stringValue(item.name),
+    color: colorString(item.color, ''),
     points: Array.isArray(item.points) ? item.points.filter(isRecord) : [],
   })).filter((item) => item.points.length > 0);
   if (!parsed.length) return;
@@ -706,7 +794,7 @@ function renderLineChart(
   }
 
   parsed.forEach((item, seriesIndex) => {
-    const color = COLORS.palette[seriesIndex % COLORS.palette.length];
+    const color = item.color || COLORS.palette[seriesIndex % COLORS.palette.length];
     const points = item.points.map((point, pointIndex) => ({
       x: xFor(pointIndex, item.points.length),
       y: yFor(Number(point.y) || 0),
@@ -752,7 +840,7 @@ function renderLineChart(
   if (parsed.length > 1) {
     parsed.forEach((item, index) => {
       const x = frame.x + frame.w - 28 - index * 124;
-      elements.push(rectangle(x - 10, frame.y + 25, 10, 10, COLORS.palette[index % COLORS.palette.length], 5));
+      elements.push(rectangle(x - 10, frame.y + 25, 10, 10, item.color || COLORS.palette[index % COLORS.palette.length], 5));
       elements.push(textBox(x - 112, frame.y + 17, 96, 26, item.name || `سری ${index + 1}`, 10, COLORS.foreground, 'right'));
     });
   }
@@ -802,7 +890,7 @@ function renderPieChart(
       size,
       size,
       donutPath(cx, cy, outer, inner, angle, next),
-      { type: 'solid', color: COLORS.palette[index % COLORS.palette.length] },
+      { type: 'solid', color: colorString(item.color, COLORS.palette[index % COLORS.palette.length]) },
       { color: COLORS.background, width: 2, dash: null },
       null,
       `pie-slice-${index + 1}`,
@@ -814,7 +902,7 @@ function renderPieChart(
   const rowHeight = Math.min(48, (contentH - 36) / slices.length);
   slices.forEach((item, index) => {
     const y = frame.y + 25 + rowHeight * index;
-    elements.push(rectangle(legendX + legendW - 13, y + 13, 10, 10, COLORS.palette[index % COLORS.palette.length], 5));
+    elements.push(rectangle(legendX + legendW - 13, y + 13, 10, 10, colorString(item.color, COLORS.palette[index % COLORS.palette.length]), 5));
     elements.push(textBox(legendX + 52, y, legendW - 70, rowHeight, item.label, 12, COLORS.foreground, 'right'));
     elements.push(textBox(legendX, y, 50, rowHeight, `${stringValue(item.value)}%`, 12, COLORS.foreground, 'left', true));
   });
@@ -901,13 +989,17 @@ function renderShapeComposition(
       path = `M ${rx} 0 A ${rx} ${ry} 0 1 0 ${rx} ${h} A ${rx} ${ry} 0 1 0 ${rx} 0 Z`;
       if (type === 'ring') shapeFill = null;
     } else if (type === 'rounded-rectangle' || type === 'pill') {
-      path = roundedRectPath(w, h, type === 'pill' ? h / 2 : Math.min(18, h / 5));
+      const radius = typeof style.radius === 'number' ? Math.max(0, style.radius) : (type === 'pill' ? h / 2 : Math.min(18, h / 5));
+      path = roundedRectPath(w, h, radius);
     } else if (type === 'triangle') {
       path = `M ${w / 2} 0 L ${w} ${h} L 0 ${h} Z`;
     } else if (type === 'diamond') {
       path = `M ${w / 2} 0 L ${w} ${h / 2} L ${w / 2} ${h} L 0 ${h / 2} Z`;
     } else if (type === 'line' || type === 'connector' || type === 'arrow') {
-      path = `M 0 ${h / 2} L ${w} ${h / 2}`;
+      const arrowEnd = type === 'arrow' || item.endArrow === true || style.endArrow === true || style.arrowhead === 'end';
+      path = arrowEnd
+        ? `M 0 ${h / 2} L ${Math.max(0, w - Math.min(14, w * .18))} ${h / 2} M ${Math.max(0, w - Math.min(14, w * .18))} ${Math.max(0, h / 2 - Math.min(8, h * .35))} L ${w} ${h / 2} L ${Math.max(0, w - Math.min(14, w * .18))} ${Math.min(h, h / 2 + Math.min(8, h * .35))}`
+        : `M 0 ${h / 2} L ${w} ${h / 2}`;
       shapeFill = null;
     } else if (type === 'polygon' && Array.isArray(item.points)) {
       const points = item.points.filter((p): p is Record<string, unknown> => isRecord(p));
@@ -947,10 +1039,25 @@ function addVisual(
   }
 }
 
-function contentSlide(source: ReferenceSlideInput): Slide {
+function contentSlide(source: ReferenceSlideInput, deck: ReferenceDeckInput): Slide {
+  resolveSlideTheme(deck, source);
   const elements: SlideElement[] = [];
+  const visual = isRecord(source.visual) ? source.visual : {};
+  const data = isRecord(visual.data) ? visual.data : {};
+  const canvas = isRecord(data.canvas) ? data.canvas : {};
+  const fullscreen = source.layout === 'graphic-fullscreen' || canvas.fullscreen === true || canvas.mode === 'fullscreen';
+  if (fullscreen && visual.type === 'shape-composition') {
+    renderShapeComposition(visual, elements, { x: 0, y: 0, w: ACTIVE_WIDTH, h: ACTIVE_HEIGHT });
+    return {
+      background: slideBackground(source, deck),
+      elements,
+      notes: detailsNotes(source),
+      layoutName: 'Reference graphic fullscreen',
+      transition: { type: 'fade', durationMs: 600 },
+    };
+  }
   const contentY = contentHeader(source, elements);
-  const contentHeight = HEIGHT - contentY - 54;
+  const contentHeight = ACTIVE_HEIGHT - contentY - 54;
   if (slideHasValidVisual(source)) {
     addBodyText(source, elements, { x: 650, y: contentY, w: 566, h: contentHeight });
     addVisual(source, elements, { x: 64, y: contentY, w: 548, h: contentHeight });
@@ -958,7 +1065,7 @@ function contentSlide(source: ReferenceSlideInput): Slide {
     addBodyText(source, elements, { x: 64, y: contentY, w: 1152, h: contentHeight });
   }
   return {
-    background: { type: 'solid', color: COLORS.background },
+    background: slideBackground(source, deck),
     elements: slideHasValidVisual(source) ? elements : filterEmptyPlaceholders(elements),
     notes: detailsNotes(source),
     layoutName: slideHasValidVisual(source) ? 'Reference content with visual' : 'Reference content',
@@ -971,16 +1078,41 @@ export function validateReferenceDeck(value: unknown): asserts value is Referenc
   if (!Array.isArray(value.slides) || value.slides.length === 0) {
     throw new Error('کلید «slides» یافت نشد یا آرایه خالی است.');
   }
+  const supportedShapeTypes = new Set(['rectangle','rounded-rectangle','pill','circle','ellipse','ring','triangle','diamond','line','connector','arrow','polygon','text']);
   value.slides.forEach((slide, index) => {
     if (!isRecord(slide)) throw new Error(`اسلاید شماره ${index + 1} نامعتبر است.`);
     if (!slide.title && !slide.layout) {
       throw new Error(`اسلاید شماره ${index + 1} نه عنوان دارد و نه layout.`);
     }
+    if (!isRecord(slide.visual) || slide.visual.type !== 'shape-composition') return;
+    const data = isRecord(slide.visual.data) ? slide.visual.data : {};
+    if (data.version !== 1) throw new Error(`نسخهٔ shape-composition در اسلاید ${index + 1} باید 1 باشد.`);
+    if (!Array.isArray(data.elements)) throw new Error(`آرایهٔ elements در shape-composition اسلاید ${index + 1} معتبر نیست.`);
+    const ids = new Set<string>();
+    data.elements.forEach((element, elementIndex) => {
+      if (!isRecord(element)) throw new Error(`عنصر ${elementIndex + 1} در اسلاید ${index + 1} نامعتبر است.`);
+      if (typeof element.id !== 'string' || !element.id.trim()) throw new Error(`عنصر ${elementIndex + 1} در اسلاید ${index + 1} باید id داشته باشد.`);
+      if (ids.has(element.id)) throw new Error(`شناسهٔ تکراری ${element.id} در اسلاید ${index + 1}.`);
+      ids.add(element.id);
+      if (typeof element.type !== 'string' || !supportedShapeTypes.has(element.type)) {
+        throw new Error(`نوع شکل «${String(element.type)}» در اسلاید ${index + 1} پشتیبانی نمی‌شود.`);
+      }
+      for (const key of ['x','y','w','h']) {
+        const value = element[key];
+        const valid = typeof value === 'number' && Number.isFinite(value)
+          && (key === 'w' || key === 'h' ? value > 0 : value >= 0 && value <= 1);
+        if (!valid) throw new Error(`مقدار ${key} در عنصر ${element.id} نامعتبر است.`);
+      }
+      if ('style' in element && !isRecord(element.style)) throw new Error(`style عنصر ${element.id} باید یک شیء باشد.`);
+      if ('content' in element && !isRecord(element.content)) throw new Error(`content عنصر ${element.id} باید یک شیء باشد.`);
+    });
   });
 }
 
 export function isReferenceDeck(value: unknown): value is ReferenceDeckInput {
   if (!isRecord(value)) return false;
+  // Canonical JSON shares presentation/slides fields but is still compiled through
+  // the same visual renderer. Its root-level render contract must remain available.
   if ('presentation' in value) return true;
   if (value.source === 'ppt' || value.source === 'pptx' || 'width' in value || 'height' in value) return false;
   return true;
@@ -988,18 +1120,21 @@ export function isReferenceDeck(value: unknown): value is ReferenceDeckInput {
 
 export function convertReferenceDeck(value: unknown): { presentation: Presentation; title: string } {
   validateReferenceDeck(value);
+  const dimensions = dimensionsForDeck(value);
+  ACTIVE_WIDTH = dimensions.width;
+  ACTIVE_HEIGHT = dimensions.height;
   const sorted = value.slides.slice().sort((left, right) => {
     const leftOrder = typeof left.order === 'number' ? left.order : 0;
     const rightOrder = typeof right.order === 'number' ? right.order : 0;
     return leftOrder - rightOrder;
   });
-  const slides = sorted.map((slide) => slide.layout === 'title' ? titleSlide(slide) : contentSlide(slide));
+  const slides = sorted.map((slide) => slide.layout === 'title' ? titleSlide(slide, value) : contentSlide(slide, value));
   const metadata = isRecord(value.presentation) ? value.presentation : {};
   return {
     title: plainReferenceText(metadata.title) || 'ارائه',
     presentation: {
-      width: WIDTH,
-      height: HEIGHT,
+      width: ACTIVE_WIDTH,
+      height: ACTIVE_HEIGHT,
       source: 'ppt',
       slides,
     },
