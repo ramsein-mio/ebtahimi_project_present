@@ -158,8 +158,10 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
       expectNullableString(visual.caption, p + '.visual.caption', errors);
       if (visual.type === 'shape-composition' && isRecord(visual.data)) {
         if (visual.data.version !== 1) errors.push({ path: p + '.visual.data.version', message: 'Unsupported shape composition version.', expected: '1', actual: String(visual.data.version), severity: 'error' });
-        if (!isRecord(visual.data.canvas)) errors.push({ path: p + '.visual.data.canvas', message: 'Canvas must be an object.', expected: 'object', actual: actualType(visual.data.canvas), severity: 'error' });
-        else validateRenderCanvas(visual.data.canvas, p + '.visual.data.canvas', errors);
+        if ('canvas' in visual.data) {
+          if (!isRecord(visual.data.canvas)) errors.push({ path: p + '.visual.data.canvas', message: 'Canvas must be an object.', expected: 'object', actual: actualType(visual.data.canvas), severity: 'error' });
+          else validateRenderCanvas(visual.data.canvas, p + '.visual.data.canvas', errors);
+        }
         if (!Array.isArray(visual.data.elements)) errors.push({ path: p + '.visual.data.elements', message: 'Shape elements must be an array.', expected: 'array', actual: actualType(visual.data.elements), severity: 'error' });
         else {
           const elementIds = new Set<string>();
