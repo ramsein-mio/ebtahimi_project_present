@@ -1078,11 +1078,34 @@ export function validateReferenceDeck(value: unknown): asserts value is Referenc
   if (!Array.isArray(value.slides) || value.slides.length === 0) {
     throw new Error('کلید «slides» یافت نشد یا آرایه خالی است.');
   }
+  const supportedShapeTypes = new Set(['rectangle','rounded-rectangle','pill','circle','ellipse','ring','triangle','diamond','line','connector','arrow','polygon','text']);
   value.slides.forEach((slide, index) => {
     if (!isRecord(slide)) throw new Error(`اسلاید شماره ${index + 1} نامعتبر است.`);
     if (!slide.title && !slide.layout) {
       throw new Error(`اسلاید شماره ${index + 1} نه عنوان دارد و نه layout.`);
     }
+    if (!isRecord(slide.visual) || slide.visual.type !== 'shape-composition') return;
+    const data = isRecord(slide.visual.data) ? slide.visual.data : {};
+    if (data.version !== 1) throw new Error(`نسخهٔ shape-composition در اسلاید ${index + 1} باید 1 باشد.`);
+    if (!Array.isArray(data.elements)) throw new Error(`آرایهٔ elements در shape-composition اسلاید ${index + 1} معتبر نیست.`);
+    const ids = new Set<string>();
+    data.elements.forEach((element, elementIndex) => {
+      if (!isRecord(element)) throw new Error(`عنصر ${elementIndex + 1} در اسلاید ${index + 1} نامعتبر است.`);
+      if (typeof element.id !== 'string' || !element.id.trim()) throw new Error(`عنصر ${elementIndex + 1} در اسلاید ${index + 1} باید id داشته باشد.`);
+      if (ids.has(element.id)) throw new Error(`شناسهٔ تکراری ${element.id} در اسلاید ${index + 1}.`);
+      ids.add(element.id);
+      if (typeof element.type !== 'string' || !supportedShapeTypes.has(element.type)) {
+        throw new Error(`نوع شکل «${String(element.type)}» در اسلاید ${index + 1} پشتیبانی نمی‌شود.`);
+      }
+      for (const key of ['x','y','w','h']) {
+        const value = element[key];
+        const valid = typeof value === 'number' && Number.isFinite(value)
+          && (key === 'w' || key === 'h' ? value > 0 : value >= 0 && value <= 1);
+        if (!valid) throw new Error(`مقدار ${key} در عنصر ${element.id} نامعتبر است.`);
+      }
+      if ('style' in element && !isRecord(element.style)) throw new Error(`style عنصر ${element.id} باید یک شیء باشد.`);
+      if ('content' in element && !isRecord(element.content)) throw new Error(`content عنصر ${element.id} باید یک شیء باشد.`);
+    });
   });
 }
 
