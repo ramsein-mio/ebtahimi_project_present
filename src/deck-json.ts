@@ -137,12 +137,14 @@ function resolveSlideTheme(deck: ReferenceDeckInput, source: ReferenceSlideInput
   const metadataTheme = isRecord(metadata.design) ? metadata.design : isRecord(metadata.theme) ? metadata.theme : {};
   const slideTheme = isRecord(source.theme) ? source.theme : {};
   const theme = { ...rootTheme, ...metadataTheme, ...slideTheme };
+  const rootCanvas = isRecord(deck.canvas) ? deck.canvas : {};
+  const metadataCanvas = isRecord(metadata.canvas) ? metadata.canvas : {};
   const visual = isRecord(source.visual) ? source.visual : {};
   const data = isRecord(visual.data) ? visual.data : {};
   const canvas = isRecord(data.canvas) ? data.canvas : {};
   const slideBackground = isRecord(source.background) ? source.background.color : source.background;
   const background = colorString(
-    slideBackground ?? canvas.background ?? metadata.background ?? theme.background,
+    slideBackground ?? canvas.background ?? metadata.background ?? metadataCanvas.background ?? rootCanvas.background ?? theme.background,
     DEFAULT_COLORS.background,
   );
   const palette = Array.isArray(theme.palette)
@@ -169,11 +171,13 @@ function slideBackground(source: ReferenceSlideInput, deck: ReferenceDeckInput):
   const metadata = isRecord(deck.presentation) ? deck.presentation : {};
   const rootTheme = isRecord(deck.theme) ? deck.theme : {};
   const metadataTheme = isRecord(metadata.design) ? metadata.design : isRecord(metadata.theme) ? metadata.theme : {};
+  const rootCanvas = isRecord(deck.canvas) ? deck.canvas : {};
+  const metadataCanvas = isRecord(metadata.canvas) ? metadata.canvas : {};
   const visual = isRecord(source.visual) ? source.visual : {};
   const data = isRecord(visual.data) ? visual.data : {};
   const canvas = isRecord(data.canvas) ? data.canvas : {};
   const explicit = isRecord(source.background) ? source.background.color : source.background;
-  const value = explicit ?? canvas.background ?? metadata.background ?? metadataTheme.background ?? rootTheme.background ?? COLORS.background;
+  const value = explicit ?? canvas.background ?? metadata.background ?? metadataCanvas.background ?? rootCanvas.background ?? metadataTheme.background ?? rootTheme.background ?? COLORS.background;
   return { type: 'solid', color: colorString(value, COLORS.background) };
 }
 
