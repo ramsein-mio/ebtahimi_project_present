@@ -31,9 +31,12 @@ export function JsonInput({ onBack, onGenerated }: JsonInputProps) {
       return result;
     }
     if (result.suggestedTitle && title === defaultTitle) setTitle(result.suggestedTitle);
+    const warningSummary = result.warnings?.length
+      ? ` هشدار: ${result.warnings.join(' — ')}`
+      : '';
     setStatus({
       kind: 'success',
-      message: `ساختار مرجع معتبر است؛ ${faNumber(result.presentation!.slides.length)} اسلاید مرتب و آمادهٔ تولید است.`,
+      message: `ساختار JSON معتبر است؛ ${faNumber(result.presentation!.slides.length)} اسلاید آمادهٔ تولید است.${warningSummary}`,
     });
     return result;
   };
