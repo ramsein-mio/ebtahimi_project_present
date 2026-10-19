@@ -1034,6 +1034,22 @@ function renderGrid(
   });
 }
 
+function applyElementOpacity(color: string, opacity: unknown): string {
+  if (typeof opacity !== 'number' || !Number.isFinite(opacity) || opacity >= 1) return color;
+  const alpha = Math.max(0, Math.min(1, opacity));
+  const hex = color.trim().match(/^#([\\da-f]{3}|[\\da-f]{6})$/i);
+  if (hex) {
+    const raw = hex[1].length === 3 ? hex[1].split('').map((part) => part + part).join('') : hex[1];
+    const red = parseInt(raw.slice(0, 2), 16);
+    const green = parseInt(raw.slice(2, 4), 16);
+    const blue = parseInt(raw.slice(4, 6), 16);
+    return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+  }
+  const rgb = color.match(/^rgba?\\(\\s*(\\d+)\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)(?:\\s*,\\s*[\\d.]+)?\\s*\\)$/i);
+  if (rgb) return `rgba(${rgb[1]}, ${rgb[2]}, ${rgb[3]}, ${alpha})`;
+  return color;
+}
+
 function resolveDesignToken(value: unknown, fallback: string): string {
   if (typeof value !== 'string') return fallback;
   const raw = value.trim();
@@ -1077,8 +1093,9 @@ function renderShapeComposition(
     const h = Math.max(1, (isLinearShape ? Math.abs(rawH) : rawH) || 0);
     const style = isRecord(item.style) ? item.style : {};
     const content = isRecord(item.content) ? item.content : {};
-    const fill = style.fill === 'none' ? 'none' : resolveDesignToken(style.fill, COLORS.soft);
-    const strokeColor = resolveDesignToken(style.stroke, COLORS.foreground);
+    const opacity = typeof style.opacity === 'number' ? Math.max(0, Math.min(1, style.opacity)) : 1;
+    const fill = style.fill === 'none' ? 'none' : applyElementOpacity(resolveDesignToken(style.fill, COLORS.soft), opacity);
+    const strokeColor = applyElementOpacity(resolveDesignToken(style.stroke, COLORS.foreground), opacity);
     const dashValue = Array.isArray(style.lineDash) ? style.lineDash : Array.isArray(style.dash) ? style.dash : null;
     const defaultsToStroke = type !== 'text' && (['line', 'connector', 'arrow', 'bracket', 'arc', 'ring'].includes(type) || style.fill === 'none');
     const hasStroke = typeof style.stroke === 'string' ? style.stroke !== 'none' : defaultsToStroke;
@@ -1144,9 +1161,10 @@ function renderShapeComposition(
     const scale = typeof style.fontScale === 'number' && Number.isFinite(style.fontScale) ? style.fontScale : typeof metadata.fontScale === 'number' && Number.isFinite(metadata.fontScale) ? metadata.fontScale : 1;
     const fontSize = Math.max(6, (typeof style.fontSize === 'number' && Number.isFinite(style.fontSize) ? style.fontSize : 16) * scale);
     const text = isText ? textBody(rawText, fontSize,
-      resolveDesignToken(style.color, COLORS.foreground),
+      applyElementOpacity(resolveDesignToken(style.color, COLORS.foreground), opacity),
       style.textAlign === 'left' || style.textAlign === 'center' ? style.textAlign : 'right',
-      style.fontWeight === 'bold' || (typeof style.fontWeight === 'number' && style.fontWeight >= 600)) : null;
+      style.fontWeight === 'bold' || (typeof style.fontWeight === 'number' && style.fontWeight >= 600),
+      style.verticalAlign === 'top' ? 'top' : style.verticalAlign === 'bottom' ? 'bottom' : 'middle') : null;
     const shapeElement = shape(x, y, w, h, type === 'text' ? null : path, type === 'text' ? null : shapeFill, stroke, text, typeof item.id === 'string' ? item.id : `composition-element-${index}`);
     shapeElement.rot = num('rotation');
     elements.push(shapeElement);
