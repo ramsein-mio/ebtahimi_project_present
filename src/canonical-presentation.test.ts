@@ -94,6 +94,29 @@ describe('canonical presentation contract', () => {
     expect(rejected.errors.some((issue) => issue.path.endsWith('elements[0].h'))).toBe(true);
   });
 
+  it('accepts signed dimensions for line-like shapes but rejects them for area shapes', () => {
+    const signedLine = {
+      version: 1,
+      elements: [{ id: 'line-negative-height', type: 'line', x: 0.1, y: 0.8, w: 0.8, h: -0.6, style: {} }],
+    };
+    const accepted = validateCanonicalPresentation({
+      ...valid,
+      slides: [{ ...slide, visual: { type: 'shape-composition', data: signedLine, caption: null } }],
+    });
+    expect(accepted.errors.some((issue) => issue.path.endsWith('elements[0].h'))).toBe(false);
+    expect(accepted.valid).toBe(true);
+
+    const signedRectangle = {
+      version: 1,
+      elements: [{ id: 'rectangle-negative-height', type: 'rectangle', x: 0.1, y: 0.2, w: 0.4, h: -0.3, style: {} }],
+    };
+    const rejected = validateCanonicalPresentation({
+      ...valid,
+      slides: [{ ...slide, visual: { type: 'shape-composition', data: signedRectangle, caption: null } }],
+    });
+    expect(rejected.errors.some((issue) => issue.path.endsWith('elements[0].h'))).toBe(true);
+  });
+
   it('validates normalized shape-composition geometry and duplicate element IDs', () => {
     const composition = {
       version: 1, canvas: { aspectRatio: '16:9', background: 'theme' },
