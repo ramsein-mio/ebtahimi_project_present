@@ -22,4 +22,5 @@ export interface ValidationResult {
   error: string | null;
   suggestedTitle?: string;
   inputFormat?: 'reference' | 'web-ppt';
+  warnings?: string[];
 }
