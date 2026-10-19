@@ -199,7 +199,16 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
             expectString(element.type, ep + '.type', errors, true);
             const supportedShapeTypes = ['rectangle','rounded-rectangle','pill','circle','ellipse','ring','triangle','diamond','line','connector','arrow','polygon','text','image','bracket','arc','group','custom'];
             if (typeof element.type === 'string' && !supportedShapeTypes.includes(element.type)) errors.push({ path: ep + '.type', message: 'Unsupported shape type for the current renderer.', expected: supportedShapeTypes.join(' | '), actual: element.type, severity: 'error' });
-            for (const key of ['x','y','w','h']) if (typeof element[key] !== 'number' || !Number.isFinite(element[key]) || (key === 'w' || key === 'h' ? Number(element[key]) <= 0 : Number(element[key]) < 0 || Number(element[key]) > 1)) errors.push({ path: ep + '.' + key, message: 'Geometry must be finite and normalized.', expected: key === 'w' || key === 'h' ? 'number > 0' : 'number in [0, 1]', actual: actualType(element[key]), severity: 'error' });
+            const isLinearShape = ['line', 'connector', 'arrow'].includes(String(element.type));
+            for (const key of ['x','y','w','h']) {
+              const dimension = key === 'w' || key === 'h';
+              const validDimension = dimension
+                ? (key === 'h' && isLinearShape ? typeof element[key] === 'number' && Number(element[key]) >= 0 : typeof element[key] === 'number' && Number(element[key]) > 0)
+                : typeof element[key] === 'number' && Number(element[key]) >= 0 && Number(element[key]) <= 1;
+              if (typeof element[key] !== 'number' || !Number.isFinite(element[key]) || !validDimension) {
+                errors.push({ path: ep + '.' + key, message: 'Geometry must be finite and normalized.', expected: dimension ? (key === 'h' && isLinearShape ? 'number >= 0 for line-like shapes, otherwise number > 0' : 'number > 0') : 'number in [0, 1]', actual: actualType(element[key]), severity: 'error' });
+              }
+            }
             if ('zIndex' in element && (typeof element.zIndex !== 'number' || !Number.isFinite(element.zIndex))) errors.push({ path: ep + '.zIndex', message: 'zIndex must be a finite number.', expected: 'finite number', actual: actualType(element.zIndex), severity: 'error' });
             if ('rotation' in element && (typeof element.rotation !== 'number' || !Number.isFinite(element.rotation))) errors.push({ path: ep + '.rotation', message: 'rotation must be a finite number.', expected: 'finite number', actual: actualType(element.rotation), severity: 'error' });
             if ('style' in element && element.style != null && !isRecord(element.style)) errors.push({ path: ep + '.style', message: 'Shape style must be an object or null.', expected: 'object | null', actual: actualType(element.style), severity: 'error' });

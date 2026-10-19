@@ -1146,10 +1146,14 @@ export function validateReferenceDeck(value: unknown): asserts value is Referenc
       if (typeof element.type !== 'string' || !supportedShapeTypes.has(element.type)) {
         throw new Error(`نوع شکل «${String(element.type)}» در اسلاید ${index + 1} پشتیبانی نمی‌شود.`);
       }
+      const isLinearShape = ['line', 'connector', 'arrow'].includes(element.type);
       for (const key of ['x','y','w','h']) {
+        const dimension = key === 'w' || key === 'h';
         const value = element[key];
         const valid = typeof value === 'number' && Number.isFinite(value)
-          && (key === 'w' || key === 'h' ? value > 0 : value >= 0 && value <= 1);
+          && (dimension
+            ? (key === 'h' && isLinearShape ? value >= 0 : value > 0)
+            : value >= 0 && value <= 1);
         if (!valid) throw new Error(`مقدار ${key} در عنصر ${element.id} نامعتبر است.`);
       }
       if ('style' in element && !isRecord(element.style)) throw new Error(`style عنصر ${element.id} باید یک شیء باشد.`);

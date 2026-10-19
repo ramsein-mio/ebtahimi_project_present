@@ -38,6 +38,34 @@ describe('shared JSON render contract', () => {
     expect(slide.elements[0]).toMatchObject({ x: 100, y: 100, w: 300, h: 200 });
   });
 
+  it('accepts zero-height horizontal lines and renders them as line elements', () => {
+    const result = convertReferenceDeck({
+      presentation: { title: 'Line geometry test' },
+      slides: [{
+        id: 'line-01', order: 1, layout: 'graphic-fullscreen', title: 'Line',
+        visual: {
+          type: 'shape-composition',
+          data: {
+            version: 1,
+            elements: [{
+              id: 'horizontal-line', type: 'line',
+              x: 0.08, y: 0.72, w: 0.42, h: 0,
+              rotation: 0, zIndex: 3,
+              style: { fill: 'none', stroke: '#F2C14E', strokeWidth: 3 },
+              content: {},
+            }],
+          },
+        },
+      }],
+    });
+
+    expect(result.presentation.slides[0].elements).toHaveLength(1);
+    expect(result.presentation.slides[0].elements[0]).toMatchObject({
+      x: 102.4, y: 518.4, w: 537.6, h: 1,
+      name: 'horizontal-line',
+    });
+  });
+
   it('applies the shared theme background when the slide has no override', () => {
     const result = convertReferenceDeck({
       presentation: { title: 'Theme test' },

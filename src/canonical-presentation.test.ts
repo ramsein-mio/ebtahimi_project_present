@@ -72,6 +72,28 @@ describe('canonical presentation contract', () => {
     expect(result.errors.some((issue) => issue.path === 'recapSlides[0].afterSlideId')).toBe(true);
   });
 
+  it('allows zero height only for line-like elements', () => {
+    const horizontalLine = {
+      version: 1,
+      elements: [{ id: 'line-01', type: 'line', x: 0.08, y: 0.72, w: 0.42, h: 0, style: {} }],
+    };
+    const accepted = validateCanonicalPresentation({
+      ...valid,
+      slides: [{ ...slide, visual: { type: 'shape-composition', data: horizontalLine, caption: null } }],
+    });
+    expect(accepted.errors.some((issue) => issue.path.endsWith('elements[0].h'))).toBe(false);
+
+    const invalidRectangle = {
+      version: 1,
+      elements: [{ id: 'rectangle-01', type: 'rectangle', x: 0.08, y: 0.72, w: 0.42, h: 0, style: {} }],
+    };
+    const rejected = validateCanonicalPresentation({
+      ...valid,
+      slides: [{ ...slide, visual: { type: 'shape-composition', data: invalidRectangle, caption: null } }],
+    });
+    expect(rejected.errors.some((issue) => issue.path.endsWith('elements[0].h'))).toBe(true);
+  });
+
   it('validates normalized shape-composition geometry and duplicate element IDs', () => {
     const composition = {
       version: 1, canvas: { aspectRatio: '16:9', background: 'theme' },
