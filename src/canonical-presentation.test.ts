@@ -174,4 +174,35 @@ describe('canonical presentation contract', () => {
     expect(result.errors.some((issue) => issue.path === 'slides[0].visual.data.accidentalField')).toBe(true);
   });
 
+
+  it('accepts the graphic style fields emitted by the design prompt', () => {
+    const composition = {
+      version: 1,
+      canvas: { aspectRatio: '16:9', background: 'theme' },
+      elements: [
+        { id: 'title', type: 'text', x: 0.1, y: 0.2, w: 0.8, h: 0.2, style: { fontSize: 0.09, fontWeight: 700, color: '#F0F6FC', textAlign: 'right', verticalAlign: 'middle' }, content: { text: 'عنوان' } },
+        { id: 'circle', type: 'circle', x: 0.2, y: 0.3, w: 0.2, h: 0.2, style: { fill: '#1F6FEB', opacity: 0.8 } },
+      ],
+    };
+    const result = validateCanonicalPresentation({
+      ...valid,
+      slides: [{ ...slide, layout: 'graphic-fullscreen', visual: { type: 'shape-composition', data: composition, caption: null } }],
+    });
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it('rejects invalid opacity and vertical alignment values', () => {
+    const composition = {
+      version: 1,
+      elements: [{ id: 'shape', type: 'circle', x: 0.1, y: 0.1, w: 0.2, h: 0.2, style: { opacity: 1.5, verticalAlign: 'center' } }],
+    };
+    const result = validateCanonicalPresentation({
+      ...valid,
+      slides: [{ ...slide, visual: { type: 'shape-composition', data: composition, caption: null } }],
+    });
+    expect(result.errors.some((issue) => issue.path.endsWith('.style.opacity'))).toBe(true);
+    expect(result.errors.some((issue) => issue.path.endsWith('.style.verticalAlign'))).toBe(true);
+  });
+
 });
