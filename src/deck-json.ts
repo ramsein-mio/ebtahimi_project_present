@@ -972,7 +972,7 @@ function resolveDesignToken(value: unknown, fallback: string): string {
   const key = raw.slice('theme.'.length);
   const semantic = (COLORS as unknown as Record<string, unknown>)[key];
   if (typeof semantic === 'string') return semantic;
-  const match = key.match(/^palette\\.(\\d+)$/);
+  const match = key.match(/^palette\.(\d+)$/);
   if (match) return COLORS.palette[Number(match[1]) % Math.max(1, COLORS.palette.length)] ?? fallback;
   return fallback;
 }
