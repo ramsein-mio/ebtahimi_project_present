@@ -100,4 +100,4 @@ Each recap entry must be `{"afterSlideId":"slide-01","type":"retrieval","prompt"
 3. Never create a second schema for teaching or graphic mode.
 4. Design intent is expressed only through `theme`, `canvas`, slide `background` / `theme`, `layout`, `visual`, and `shape-composition` fields.
 5. Use colors explicitly where visual precision matters; do not rely on renderer guesses.
-6. Do not claim unsupported visual effects (gradients, shadows, opacity, or image assets).
+6. Do not claim unsupported visual effects (gradients, shadows, or image assets). `opacity` is supported as a per-element alpha value from 0 to 1.
