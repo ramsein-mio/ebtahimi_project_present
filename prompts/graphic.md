@@ -1,21 +1,50 @@
 # Graphic-presentation prompt
 
-Follow `shared-json-contract.md` exactly. Output one valid JSON object only, with no Markdown fences or commentary.
+Follow `shared-json-contract.md` and the runtime validator exactly. Return one JSON object only: no Markdown fences, comments, or prose.
 
 ## Goal
-Create visually rich, art-directed slides—not a lesson script and not a speaker-delivery template. Favor deliberate composition, visual metaphor grounded in the source, concise labels, contrast, rhythm, whitespace, and consistent visual identity across the whole deck.
+Create a colorful, polished, visually expressive presentation—not a lesson script and not a speaker-delivery template. Use deliberate art direction: strong focal points, geometric shapes, layered composition, typography, contrast, whitespace, diagrams, and varied layouts. The deck should feel designed, not like repeated generic cards.
 
-## Shared theme
-Define one coherent deck theme in `presentation.design` (or root `theme`) and reuse it across slides. Include concrete `background`, `foreground`, `muted`, `surface`, `border`, `highlight`, a 3–6 color `palette`, and `fontFamily`. Prefer `theme.primary`, `theme.secondary`, `theme.accent`, `theme.text`, `theme.surface`, and `theme.palette.N` tokens in shapes so the renderer can preserve color harmony. Do not use black or white as large default fills unless that is an intentional part of the selected theme. Keep text contrast readable.
+## Shared contract is mandatory
+- Use exactly the canonical root keys: `presentation`, `slides`, `recapSlides`. Never add a `mode` key.
+- Use exactly the required metadata, slide, body, visual, and recap fields from `shared-json-contract.md`. Do not add arbitrary fields.
+- Select only validator-supported layouts: `title`, `content`, `visual-right`, `image-led-right`, `asymmetric-editorial`, `graphic-fullscreen`, `full-bleed`, `shape-composition`.
+- Select only supported visual types: `none`, `icon-list`, `bar-chart`, `line-chart`, `pie-chart`, `comparison-grid`, `table`, `shape-composition`.
+- For a full-slide composition, use `layout: "graphic-fullscreen"` with `visual.type: "shape-composition"`. Do not place full-canvas coordinates inside a normal split content layout.
+- Do not use unsupported shape types such as `image`, `group`, or `custom`. The current shape types are `rectangle`, `rounded-rectangle`, `pill`, `circle`, `ellipse`, `ring`, `triangle`, `diamond`, `line`, `connector`, `arrow`, `polygon`, `text`, `bracket`, and `arc`.
+- Shape `style` may contain only the keys documented in the shared contract. Do not emit `shadow`, `gradient`, `blendMode`, `lineHeight`, or undocumented style/content properties.
+- To avoid validator incompatibilities, omit `fontWeight` unless necessary; when used, use only `"normal"`, `"bold"`, or a JSON number such as `700` (not the string `"700"`). Use `textAlign` values `left`, `center`, or `right`; `verticalAlign` values `top`, `middle`, or `bottom`.
+- Every element must have a unique `id`, supported `type`, finite normalized `x` and `y` in [0,1], and valid dimensions. Area shapes require positive `w` and `h`. Only `line`, `connector`, and `arrow` may use zero or signed `w`/`h`. Keep visible content within the canvas.
+- Text shapes use `content.text` and supported style fields such as `color`, `fontSize`, and `textAlign`. Use only `fill`, `stroke`, `strokeWidth`, `fontSize`, `color`, `textAlign`, `fontWeight`, `opacity`, `verticalAlign`, `radius`, `lineDash`, `dash`, `endArrow`, and `fontScale` in `style`.
+- Do not claim unsupported effects or assets. Do not create image URLs. Use a supported visual or `none` when an actual asset/data source is unavailable.
 
-## Composition rules
-- Use `layout: "graphic-fullscreen"` with `visual.type: "shape-composition"` for infographics, visual comparisons, timelines, processes, frameworks, editorial compositions, and bento grids that should occupy the whole slide.
-- Use normalized `x`, `y`, `w`, `h` coordinates in [0,1] for position and size; plan a coherent grid and safe margins. Use `rotation` sparingly, `zIndex` deliberately, and stable unique IDs.
-- Use a mix of supported primitives—circles, rounded rectangles, pills, rings, lines, arrows, diamonds, triangles, polygons, and text—not repeated generic cards. Combine shapes to create diagrams, layered compositions, callouts, labels, connectors, and visual grouping.
-- Every non-text shape must specify `style.fill` and `style.stroke` explicitly (use `"none"` when intentionally absent). Give connectors a visible stroke and positive stroke width. Text elements must specify `content.text`, `style.color`, `style.fontSize`, and `style.textAlign`.
-- Line-like shapes (`line`, `connector`, `arrow`) may use zero or signed `w`/`h` to express horizontal, vertical, or diagonal direction. Area shapes require positive `w`/`h`.
-- Do not use unsupported `image`, `group`, or `custom` types, unimplemented visual types, gradients, or shadows. `opacity` is supported from 0 to 1; `fontWeight` accepts `normal`, `bold`, or numeric 100–900 in steps of 100; `verticalAlign` accepts `top`, `middle`, or `bottom`. Do not simulate missing assets with huge solid rectangles.
-- Avoid clipping, overlaps that obscure text, redundant decorative shapes, oversized empty frames, and empty left-side panels. Every element must serve hierarchy, explanation, or visual balance.
+## Theme and optional settings
+Use `presentation.design` for a coherent render theme when desired. It may define supported theme values such as `background`, `foreground`, `muted`, `surface`, `border`, `highlight`, `palette`, and `fontFamily`. Use a coordinated palette of 3–6 colors and preserve readable contrast. Reuse theme tokens and colors consistently instead of assigning random colors to every shape.
 
-## Text and fidelity
-Use concise visible text; preserve the source's facts and relationships. Do not invent metrics, labels, causal links, or assets. Put explanatory depth in `body` rich-text details or `speakerNotes`, not into crowded graphics. The same root, presentation, slide, body, visual, and recap schema must be used for all modes. Keep the canonical root keys exactly `presentation`, `slides`, and `recapSlides`.
+If a non-essential user preference—theme, palette, background, font preference, or other visual customization—is missing, empty, or null, choose a tasteful default and continue. Never fail or omit the presentation merely because optional design preferences were not supplied. Required source material and required canonical fields must still be present. If the source is too empty to support meaningful slides, do not invent facts; return the best valid minimal deck the available source supports.
+
+## Composition
+- Use shapes frequently when they communicate hierarchy, group related ideas, frame a message, or explain a source-supported relationship.
+- Mix circles, rings, pills, rounded rectangles, polygons, lines, arrows, and text where appropriate. Avoid repeating the same card grid on every slide.
+- Every significant shape must serve a visual or semantic purpose. Use intentional scale, spacing, layering, alignment, and contrast.
+- Use a strong opening, meaningful variation between slides, and a source-supported ending. Each slide needs a clear focal point.
+- Avoid blank oversized panels, useless empty shapes, accidental overlaps, clipped text, and decorative elements that consume space without communicating anything.
+- Use colorful compositions, but maintain a consistent visual identity and readable text. Do not use large solid shapes as fake image placeholders.
+- Use charts and diagrams only when the source supports their values and relationships. Never invent statistics, categories, rankings, steps, dates, causal links, or evidence to make a slide look more impressive.
+
+## Source fidelity and text
+The provided source is the factual foundation for visible slide content. Preserve important names, numbers, units, dates, qualifications, and distinctions. You may reorganize the source visually but must not change its meaning or introduce unsupported claims.
+Keep visible text concise but not misleadingly incomplete. Put additional explanation in permitted `body.lead`, `body.bullets[]`, or `body.emphasis` objects using exactly `{"text":"Visible text","details":"Non-empty additional explanation"}`; otherwise use plain strings. Never add details fields to other objects. Do not use external research unless it is available and citations can be supplied accurately inside More Details.
+
+## Final validation checklist
+Before returning JSON, verify:
+1. JSON parses directly with `JSON.parse()`.
+2. Root keys are exactly `presentation`, `slides`, and `recapSlides`.
+3. Every required field exists and has the correct type.
+4. No unsupported layout, visual type, shape type, or style/content key appears.
+5. All slide IDs are unique; all recap and metadata slide references exist.
+6. All geometry, colors, dimensions, enum values, and rich-text objects conform to the shared contract.
+7. Empty optional visual preferences use defaults rather than causing failure.
+8. No unsupported facts, statistics, relationships, URLs, or rendering effects are invented.
+
+Do not claim that the actual rendered slides were tested unless they were rendered and inspected.
