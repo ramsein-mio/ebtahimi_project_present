@@ -1104,7 +1104,7 @@ function renderShapeComposition(
     } else if (type === 'diamond') {
       path = `M ${w / 2} 0 L ${w} ${h / 2} L ${w / 2} ${h} L 0 ${h / 2} Z`;
     } else if (type === 'line' || type === 'connector' || type === 'arrow') {
-      const arrowEnd = type === 'arrow' || item.endArrow === true || style.endArrow === true || style.arrowhead === 'end';
+      const arrowEnd = type === 'arrow' || item.endArrow === true || style.endArrow === true;
       const startX = rawW === 0 ? w / 2 : rawW < 0 ? w : 0;
       const endX = rawW === 0 ? w / 2 : rawW < 0 ? 0 : w;
       const startY = rawH === 0 ? h / 2 : rawH < 0 ? h : 0;
