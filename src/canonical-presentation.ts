@@ -37,6 +37,17 @@ export interface CanonicalPresentation {
     targetAudience: string; estimatedTotalDurationSeconds: number;
     learningObjectives: string[]; coverageChecklist: CoverageChecklistItem[];
     teachingRoadmap: TeachingRoadmapItem[];
+    direction?: 'ltr' | 'rtl' | 'auto' | null;
+    locale?: string | null;
+    fontScale?: number | null;
+    spacingScale?: number | null;
+    radiusScale?: number | null;
+    shadowStyle?: 'none' | 'soft' | 'medium' | 'strong' | null;
+    contrast?: 'normal' | 'high' | null;
+    palette?: string[] | null;
+    semanticColors?: Record<string, string> | null;
+    assets?: unknown[] | null;
+    layoutDefaults?: Record<string, unknown> | null;
   };
   slides: CanonicalSlide[];
   recapSlides: { afterSlideId: string; type: 'retrieval' | 'spaced-repetition'; prompt: string }[];
@@ -171,7 +182,7 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
       expectNullableString(visual.caption, p + '.visual.caption', errors);
       if (visual.type === 'shape-composition' && isRecord(visual.data)) {
         if (visual.data.version !== 1) errors.push({ path: p + '.visual.data.version', message: 'Unsupported shape composition version.', expected: '1', actual: String(visual.data.version), severity: 'error' });
-        if ('canvas' in visual.data) {
+        if ('canvas' in visual.data && visual.data.canvas != null) {
           if (!isRecord(visual.data.canvas)) errors.push({ path: p + '.visual.data.canvas', message: 'Canvas must be an object.', expected: 'object', actual: actualType(visual.data.canvas), severity: 'error' });
           else validateRenderCanvas(visual.data.canvas, p + '.visual.data.canvas', errors);
         }
