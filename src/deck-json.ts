@@ -997,10 +997,17 @@ function renderShapeComposition(
     const item = raw as Record<string, unknown>;
     const type = typeof item.type === 'string' ? item.type : '';
     const num = (key: string, fallback = 0) => typeof item[key] === 'number' && Number.isFinite(item[key]) ? Number(item[key]) : fallback;
-    const x = frame.x + num('x') * frame.w;
-    const y = frame.y + num('y') * frame.h;
-    const w = Math.max(1, num('w', 0.01) * frame.w);
-    const h = Math.max(1, num('h', 0.01) * frame.h);
+    const rawX = num('x') * frame.w;
+    const rawY = num('y') * frame.h;
+    const rawW = num('w', 0.01) * frame.w;
+    const rawH = num('h', 0.01) * frame.h;
+    const isLinearShape = ['line', 'connector', 'arrow'].includes(type);
+    // Line geometry describes a directed vector. Normalize its bounding box
+    // for the shape API, while retaining the original signs for the path.
+    const x = frame.x + (isLinearShape ? rawX + Math.min(0, rawW) : rawX);
+    const y = frame.y + (isLinearShape ? rawY + Math.min(0, rawH) : rawY);
+    const w = Math.max(1, (isLinearShape ? Math.abs(rawW) : rawW) || 0);
+    const h = Math.max(1, (isLinearShape ? Math.abs(rawH) : rawH) || 0);
     const style = isRecord(item.style) ? item.style : {};
     const content = isRecord(item.content) ? item.content : {};
     const fill = style.fill === 'none' ? 'none' : resolveDesignToken(style.fill, COLORS.soft);
@@ -1022,9 +1029,24 @@ function renderShapeComposition(
       path = `M ${w / 2} 0 L ${w} ${h / 2} L ${w / 2} ${h} L 0 ${h / 2} Z`;
     } else if (type === 'line' || type === 'connector' || type === 'arrow') {
       const arrowEnd = type === 'arrow' || item.endArrow === true || style.endArrow === true || style.arrowhead === 'end';
-      path = arrowEnd
-        ? `M 0 ${h / 2} L ${Math.max(0, w - Math.min(14, w * .18))} ${h / 2} M ${Math.max(0, w - Math.min(14, w * .18))} ${Math.max(0, h / 2 - Math.min(8, h * .35))} L ${w} ${h / 2} L ${Math.max(0, w - Math.min(14, w * .18))} ${Math.min(h, h / 2 + Math.min(8, h * .35))}`
-        : `M 0 ${h / 2} L ${w} ${h / 2}`;
+      const startX = rawW === 0 ? w / 2 : rawW < 0 ? w : 0;
+      const endX = rawW === 0 ? w / 2 : rawW < 0 ? 0 : w;
+      const startY = rawH === 0 ? h / 2 : rawH < 0 ? h : 0;
+      const endY = rawH === 0 ? h / 2 : rawH < 0 ? 0 : h;
+      if (arrowEnd) {
+        const angle = Math.atan2(endY - startY, endX - startX);
+        const head = Math.min(14, Math.max(5, Math.min(w, h || w) * .18));
+        const wing = Math.min(8, head * .65);
+        const baseX = endX - Math.cos(angle) * head;
+        const baseY = endY - Math.sin(angle) * head;
+        const leftX = baseX + Math.cos(angle + Math.PI / 2) * wing;
+        const leftY = baseY + Math.sin(angle + Math.PI / 2) * wing;
+        const rightX = baseX + Math.cos(angle - Math.PI / 2) * wing;
+        const rightY = baseY + Math.sin(angle - Math.PI / 2) * wing;
+        path = `M ${startX} ${startY} L ${baseX} ${baseY} M ${leftX} ${leftY} L ${endX} ${endY} L ${rightX} ${rightY}`;
+      } else {
+        path = `M ${startX} ${startY} L ${endX} ${endY}`;
+      }
       shapeFill = null;
     } else if (type === 'bracket') {
       const side = content.side === 'left' ? 'left' : content.side === 'top' ? 'top' : content.side === 'bottom' ? 'bottom' : 'right';
@@ -1152,7 +1174,7 @@ export function validateReferenceDeck(value: unknown): asserts value is Referenc
         const value = element[key];
         const valid = typeof value === 'number' && Number.isFinite(value)
           && (dimension
-            ? (key === 'h' && isLinearShape ? value >= 0 : value > 0)
+            ? (isLinearShape ? true : value > 0)
             : value >= 0 && value <= 1);
         if (!valid) throw new Error(`مقدار ${key} در عنصر ${element.id} نامعتبر است.`);
       }
