@@ -79,11 +79,15 @@ Optional slide fields: `background`, `theme`.
 
 ## Shape composition
 
-Coordinates `x`, `y`, `w`, `h` are normalized fractions of the composition canvas: x/y start at 0; w/h are positive. Keep intended geometry inside the canvas. `zIndex` controls draw order (low first, high last). Every element has unique `id`, `type`, `x`, `y`, `w`, `h`; optional fields include `zIndex`, `rotation`, `style`, `content`, and polygon `points`.
+Coordinates `x`, `y`, `w`, `h` are normalized fractions of the composition canvas. `x` and `y` must be in [0,1]. Area shapes require positive `w` and `h`; line-like shapes (`line`, `connector`, `arrow`) may use zero or signed `w`/`h` to express direction. Keep visible geometry inside the canvas. `zIndex` controls draw order (low first, high last). Every element has a unique `id` and explicit geometry; optional fields include `rotation`, `style`, `content`, and polygon `points`. Do not use duplicate IDs or emit unknown keys/types.
 
-Supported types: `rectangle`, `rounded-rectangle`, `pill`, `circle`, `ellipse`, `ring`, `triangle`, `diamond`, `line`, `connector`, `arrow`, `polygon`, `text`. Do not emit `image`, `arc`, or `bracket` until their dedicated renderer support is implemented.
+Supported types in the current renderer: `rectangle`, `rounded-rectangle`, `pill`, `circle`, `ellipse`, `ring`, `triangle`, `diamond`, `line`, `connector`, `arrow`, `polygon`, `text`, `bracket`, `arc`. Do not emit `image`, `group`, or `custom`: they are not rendered as actual images or nested/custom shapes. Do not approximate unsupported elements with giant rectangles.
 
-Supported style keys: `fill` (color or `"none"`), `stroke` (color or `"none"`), `strokeWidth` (number), `fontSize` (number), `color` (text color), `textAlign` (`left`, `center`, `right`), `fontWeight` (`bold` or normal), `radius` (number for rounded shapes). Text is supplied through `content.text` or `content.value`. For arrows, use type `arrow`; line/connector elements may set `endArrow: true`.
+Supported style keys: `fill` (CSS color, `"none"`, or a theme token), `stroke` (CSS color, `"none"`, or a theme token), `strokeWidth` (positive number), `fontSize` (number), `color` (text color/theme token), `textAlign` (`left`, `center`, `right`), `fontWeight` (`bold` or normal), `radius` (number for rounded shapes), `lineDash`/`dash` (number array), `endArrow`, and `fontScale`. Text is supplied through `content.text` or `content.value`. For arrows, use type `arrow`; line/connector elements may set `endArrow: true`.
+
+Theme tokens include `theme.background`, `theme.foreground`/`theme.text`, `theme.muted`, `theme.surface`, `theme.border`, `theme.highlight`, `theme.primary`, `theme.secondary`, `theme.accent`, and `theme.palette.N` (zero-based palette index). Use explicit theme tokens rather than hard-coded near-black fills when the composition should adapt to the deck theme. The literal `"theme"` is supported for canvas backgrounds and resolves to the active theme background.
+
+A graphic intended to occupy the entire slide MUST set `layout: "graphic-fullscreen"` or set `visual.data.canvas.fullscreen: true`. Normal `content` layouts reserve a split text/visual frame; normalized full-canvas coordinates must not be used there unless the split frame is intentional.
 
 ## Recap slides
 
