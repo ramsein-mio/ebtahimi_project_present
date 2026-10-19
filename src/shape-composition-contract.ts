@@ -46,7 +46,6 @@ export const COMPOSITION_STYLE_KEYS = [
   'lineDash',
   'dash',
   'endArrow',
-  'arrowhead',
   'fontScale',
 ] as const;
 
