@@ -203,10 +203,10 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
             for (const key of ['x','y','w','h']) {
               const dimension = key === 'w' || key === 'h';
               const validDimension = dimension
-                ? (key === 'h' && isLinearShape ? typeof element[key] === 'number' && Number(element[key]) >= 0 : typeof element[key] === 'number' && Number(element[key]) > 0)
+                ? (isLinearShape ? typeof element[key] === 'number' : typeof element[key] === 'number' && Number(element[key]) > 0)
                 : typeof element[key] === 'number' && Number(element[key]) >= 0 && Number(element[key]) <= 1;
               if (typeof element[key] !== 'number' || !Number.isFinite(element[key]) || !validDimension) {
-                errors.push({ path: ep + '.' + key, message: 'Geometry must be finite and normalized.', expected: dimension ? (key === 'h' && isLinearShape ? 'number >= 0 for line-like shapes, otherwise number > 0' : 'number > 0') : 'number in [0, 1]', actual: actualType(element[key]), severity: 'error' });
+                errors.push({ path: ep + '.' + key, message: 'Geometry must be finite and normalized.', expected: dimension ? (isLinearShape ? 'finite number; signed or zero dimensions allowed for line-like shapes' : 'number > 0') : 'number in [0, 1]', actual: actualType(element[key]), severity: 'error' });
               }
             }
             if ('zIndex' in element && (typeof element.zIndex !== 'number' || !Number.isFinite(element.zIndex))) errors.push({ path: ep + '.zIndex', message: 'zIndex must be a finite number.', expected: 'finite number', actual: actualType(element.zIndex), severity: 'error' });
