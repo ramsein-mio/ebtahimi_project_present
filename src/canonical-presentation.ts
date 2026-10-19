@@ -1,4 +1,9 @@
-import { SUPPORTED_COMPOSITION_SHAPE_TYPES } from './shape-composition-contract';
+import {
+  COMPOSITION_CONTENT_KEYS,
+  COMPOSITION_ELEMENT_KEYS,
+  COMPOSITION_STYLE_KEYS,
+  SUPPORTED_COMPOSITION_SHAPE_TYPES,
+} from './shape-composition-contract';
 
 export type CognitiveLoad = 'low' | 'medium' | 'high';
 export type RichTextLine = string | { text: string; details: string };
@@ -202,6 +207,7 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
           visual.data.elements.forEach((element, j) => {
             const ep = p + '.visual.data.elements[' + j + ']';
             if (!isRecord(element)) { errors.push({ path: ep, message: 'Shape element must be an object.', expected: 'object', actual: actualType(element), severity: 'error' }); return; }
+            exactKeys(element, [...COMPOSITION_ELEMENT_KEYS], ep, errors, ['rotation', 'zIndex', 'style', 'content', 'points']);
             expectString(element.id, ep + '.id', errors, true);
             if (typeof element.id === 'string') { if (elementIds.has(element.id)) errors.push({ path: ep + '.id', message: 'Element IDs must be unique.', expected: 'unique ID', actual: element.id, severity: 'error' }); elementIds.add(element.id); }
             expectString(element.type, ep + '.type', errors, true);
@@ -220,8 +226,60 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
             if ('zIndex' in element && (typeof element.zIndex !== 'number' || !Number.isFinite(element.zIndex))) errors.push({ path: ep + '.zIndex', message: 'zIndex must be a finite number.', expected: 'finite number', actual: actualType(element.zIndex), severity: 'error' });
             if ('rotation' in element && (typeof element.rotation !== 'number' || !Number.isFinite(element.rotation))) errors.push({ path: ep + '.rotation', message: 'rotation must be a finite number.', expected: 'finite number', actual: actualType(element.rotation), severity: 'error' });
             if ('style' in element && element.style != null && !isRecord(element.style)) errors.push({ path: ep + '.style', message: 'Shape style must be an object or null.', expected: 'object | null', actual: actualType(element.style), severity: 'error' });
+            else if (isRecord(element.style)) {
+              const style = element.style;
+              exactKeys(style, [...COMPOSITION_STYLE_KEYS], ep + '.style', errors, [...COMPOSITION_STYLE_KEYS]);
+              for (const key of ['fill', 'stroke', 'color']) {
+                if (key in style && style[key] != null && typeof style[key] !== 'string') {
+                  errors.push({ path: ep + '.style.' + key, message: 'Color values must be CSS color strings or supported theme tokens.', expected: 'string', actual: actualType(style[key]), severity: 'error' });
+                }
+              }
+              for (const key of ['strokeWidth', 'fontSize', 'radius', 'fontScale']) {
+                if (key in style && style[key] != null && (typeof style[key] !== 'number' || !Number.isFinite(style[key]) || Number(style[key]) <= 0)) {
+                  errors.push({ path: ep + '.style.' + key, message: 'Style dimension must be a positive finite number.', expected: 'number > 0', actual: actualType(style[key]), severity: 'error' });
+                }
+              }
+              if ('textAlign' in style && style.textAlign != null && !['left', 'center', 'right'].includes(String(style.textAlign))) {
+                errors.push({ path: ep + '.style.textAlign', message: 'Unsupported text alignment.', expected: 'left | center | right', actual: String(style.textAlign), severity: 'error' });
+              }
+              if ('fontWeight' in style && style.fontWeight != null && !['bold', 'normal'].includes(String(style.fontWeight))) {
+                errors.push({ path: ep + '.style.fontWeight', message: 'Unsupported font weight.', expected: 'bold | normal', actual: String(style.fontWeight), severity: 'error' });
+              }
+              for (const key of ['lineDash', 'dash']) {
+                if (key in style && style[key] != null && (!Array.isArray(style[key]) || style[key].some((n) => typeof n !== 'number' || !Number.isFinite(n) || n <= 0))) {
+                  errors.push({ path: ep + '.style.' + key, message: 'Dash pattern must contain positive finite numbers.', expected: 'number[]', actual: actualType(style[key]), severity: 'error' });
+                }
+              }
+              if ('endArrow' in style && style.endArrow != null && typeof style.endArrow !== 'boolean') {
+                errors.push({ path: ep + '.style.endArrow', message: 'endArrow must be boolean.', expected: 'boolean', actual: actualType(style.endArrow), severity: 'error' });
+              }
+              if ('arrowhead' in style && style.arrowhead != null && !['start', 'end', 'both', 'none'].includes(String(style.arrowhead))) {
+                errors.push({ path: ep + '.style.arrowhead', message: 'Unsupported arrowhead setting.', expected: 'start | end | both | none', actual: String(style.arrowhead), severity: 'error' });
+              }
+            }
             if ('content' in element && element.content != null && !isRecord(element.content)) errors.push({ path: ep + '.content', message: 'Shape content must be an object or null.', expected: 'object | null', actual: actualType(element.content), severity: 'error' });
-            if (typeof element.x === 'number' && typeof element.w === 'number' && element.x + element.w > 1.000001) warnings.push({ path: ep, message: 'Element extends beyond the right canvas edge; renderer may clip it.', severity: 'warning' });
+            else if (isRecord(element.content)) {
+              exactKeys(element.content, [...COMPOSITION_CONTENT_KEYS], ep + '.content', errors, [...COMPOSITION_CONTENT_KEYS]);
+              for (const key of COMPOSITION_CONTENT_KEYS) {
+                if (key in element.content && element.content[key] != null && typeof element.content[key] !== 'string') {
+                  errors.push({ path: ep + '.content.' + key, message: 'Shape content values must be strings.', expected: 'string', actual: actualType(element.content[key]), severity: 'error' });
+                }
+              }
+            }
+            if ('points' in element && element.points != null) {
+              if (!Array.isArray(element.points)) errors.push({ path: ep + '.points', message: 'Polygon points must be an array.', expected: 'array of normalized points', actual: actualType(element.points), severity: 'error' });
+              else element.points.forEach((point, k) => {
+                const pp = ep + '.points[' + k + ']';
+                if (!isRecord(point)) { errors.push({ path: pp, message: 'Polygon point must be an object.', expected: '{ x, y }', actual: actualType(point), severity: 'error' }); return; }
+                exactKeys(point, ['x', 'y'], pp, errors);
+                for (const axis of ['x', 'y']) {
+                  if (typeof point[axis] !== 'number' || !Number.isFinite(point[axis]) || Number(point[axis]) < 0 || Number(point[axis]) > 1) {
+                    errors.push({ path: pp + '.' + axis, message: 'Polygon point coordinates must be normalized.', expected: 'number in [0,1]', actual: actualType(point[axis]), severity: 'error' });
+                  }
+                }
+              });
+            }
+            if (typeof element.x === 'number' && typeof element.w === 'number' && element.x + Math.max(0, element.w) > 1.000001) warnings.push({ path: ep, message: 'Element extends beyond the right canvas edge; renderer may clip it.', severity: 'warning' });
             if (typeof element.y === 'number' && typeof element.h === 'number' && element.y + element.h > 1.000001) warnings.push({ path: ep, message: 'Element extends beyond the bottom canvas edge; renderer may clip it.', severity: 'warning' });
             if (isRecord(element.style)) {
               const st = element.style;
