@@ -252,8 +252,14 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
               if ('textAlign' in style && style.textAlign != null && !['left', 'center', 'right'].includes(String(style.textAlign))) {
                 errors.push({ path: ep + '.style.textAlign', message: 'Unsupported text alignment.', expected: 'left | center | right', actual: String(style.textAlign), severity: 'error' });
               }
-              if ('fontWeight' in style && style.fontWeight != null && !['bold', 'normal'].includes(String(style.fontWeight))) {
-                errors.push({ path: ep + '.style.fontWeight', message: 'Unsupported font weight.', expected: 'bold | normal', actual: String(style.fontWeight), severity: 'error' });
+              if ('fontWeight' in style && style.fontWeight != null) {
+                const weight = style.fontWeight;
+                const validWeight = weight === 'bold' || weight === 'normal'
+                  || typeof weight === 'number' && Number.isInteger(weight) && weight >= 100 && weight <= 900 && weight % 100 === 0;
+                if (!validWeight) errors.push({ path: ep + '.style.fontWeight', message: 'Unsupported font weight.', expected: 'normal | bold | numeric 100–900 in steps of 100', actual: String(weight), severity: 'error' });
+              }
+              if ('verticalAlign' in style && style.verticalAlign != null && !['top', 'middle', 'bottom'].includes(String(style.verticalAlign))) {
+                errors.push({ path: ep + '.style.verticalAlign', message: 'Unsupported vertical alignment.', expected: 'top | middle | bottom', actual: String(style.verticalAlign), severity: 'error' });
               }
               for (const key of ['lineDash', 'dash']) {
                 if (key in style && style[key] != null && (!Array.isArray(style[key]) || style[key].some((n) => typeof n !== 'number' || !Number.isFinite(n) || n <= 0))) {
