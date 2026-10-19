@@ -42,6 +42,8 @@ export const COMPOSITION_STYLE_KEYS = [
   'color',
   'textAlign',
   'fontWeight',
+  'opacity',
+  'verticalAlign',
   'radius',
   'lineDash',
   'dash',
