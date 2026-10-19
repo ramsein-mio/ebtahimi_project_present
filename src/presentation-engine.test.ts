@@ -196,13 +196,38 @@ describe('چرخهٔ JSON تا ذخیره و بازگشایی', () => {
     expect(result.presentation?.slides[0].elements.some((element) => element.name === 'line-a')).toBe(true);
   });
 
-  it('JSON canonical را بدون رد شدن به‌خاطر کلیدهای metadata اضافی به compiler می‌سپارد', () => {
-    const result = validatePresentationJson(JSON.stringify({
-      presentation: { title: 'آزمایش', extraMetadata: true },
-      slides: [{ layout: 'content', title: 'اسلاید بدون visual', body: { lead: 'متن' }, visual: { type: 'none', data: {}, caption: null } }],
-      recapSlides: [], mode: 'teaching',
+  it('JSON استاندارد را در مرز ورودی سخت‌گیرانه اعتبارسنجی می‌کند', () => {
+    const base = {
+      presentation: {
+        title: 'آزمایش استاندارد', subtitle: null, language: 'fa', theme: 'modern',
+        targetAudience: 'students', estimatedTotalDurationSeconds: 45,
+        learningObjectives: ['درک مفهوم'], coverageChecklist: [],
+        teachingRoadmap: [],
+      },
+      slides: [{
+        id: 'slide-01', order: 1, section: 'Introduction', layout: 'content',
+        title: 'اسلاید بدون visual', subtitle: null,
+        body: { lead: 'متن', bullets: [], emphasis: '' },
+        visual: { type: 'none', data: {}, caption: null },
+        speakerNotes: '', durationSeconds: 45, psychologicalPurpose: 'orient',
+        cognitiveLoad: 'low', sourceReference: '',
+      }],
+      recapSlides: [],
+    };
+
+    const valid = validatePresentationJson(JSON.stringify(base));
+    expect(valid.error).toBeNull();
+    expect(valid.presentation?.slides).toHaveLength(1);
+
+    const extraRootKey = validatePresentationJson(JSON.stringify({ ...base, mode: 'teaching' }));
+    expect(extraRootKey.presentation).toBeNull();
+    expect(extraRootKey.error).toContain('mode');
+
+    const extraMetadataKey = validatePresentationJson(JSON.stringify({
+      ...base,
+      presentation: { ...base.presentation, extraMetadata: true },
     }));
-    expect(result.error).toBeNull();
-    expect(result.presentation?.slides).toHaveLength(1);
+    expect(extraMetadataKey.presentation).toBeNull();
+    expect(extraMetadataKey.error).toContain('extraMetadata');
   });
 });
