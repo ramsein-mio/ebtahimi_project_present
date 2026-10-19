@@ -16,6 +16,7 @@ const BASE_HEIGHT = 720;
 let ACTIVE_WIDTH = BASE_WIDTH;
 let ACTIVE_HEIGHT = BASE_HEIGHT;
 let FONT = ['Vazirmatn', 'Tahoma', 'Arial'];
+let ACTIVE_PRESENTATION_META: Record<string, unknown> = {};
 
 const DEFAULT_COLORS = {
   background: '#ffffff',
@@ -63,6 +64,9 @@ export interface ReferenceSlideInput {
   order?: unknown;
   section?: unknown;
   layout?: unknown;
+  layoutConfig?: unknown;
+  background?: unknown;
+  theme?: unknown;
   title?: unknown;
   subtitle?: unknown;
   body?: {
@@ -137,6 +141,8 @@ function resolveSlideTheme(deck: ReferenceDeckInput, source: ReferenceSlideInput
   const metadataTheme = isRecord(metadata.design) ? metadata.design : isRecord(metadata.theme) ? metadata.theme : {};
   const slideTheme = isRecord(source.theme) ? source.theme : {};
   const theme = { ...rootTheme, ...metadataTheme, ...slideTheme };
+  if (Array.isArray(metadata.palette)) theme.palette = metadata.palette;
+  if (isRecord(metadata.semanticColors)) theme.semanticColors = metadata.semanticColors;
   const rootCanvas = isRecord(deck.canvas) ? deck.canvas : {};
   const metadataCanvas = isRecord(metadata.canvas) ? metadata.canvas : {};
   const visual = isRecord(source.visual) ? source.visual : {};
@@ -954,6 +960,18 @@ function renderGrid(
   });
 }
 
+function resolveDesignToken(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') return fallback;
+  const raw = value.trim();
+  if (!raw.startsWith('theme.')) return colorString(raw, fallback);
+  const key = raw.slice('theme.'.length);
+  const semantic = (COLORS as unknown as Record<string, unknown>)[key];
+  if (typeof semantic === 'string') return semantic;
+  const match = key.match(/^palette\\.(\\d+)$/);
+  if (match) return COLORS.palette[Number(match[1]) % Math.max(1, COLORS.palette.length)] ?? fallback;
+  return fallback;
+}
+
 function renderShapeComposition(
   visual: Record<string, unknown>,
   elements: SlideElement[],
@@ -979,11 +997,12 @@ function renderShapeComposition(
     const h = Math.max(1, num('h', 0.01) * frame.h);
     const style = isRecord(item.style) ? item.style : {};
     const content = isRecord(item.content) ? item.content : {};
-    const fill = typeof style.fill === 'string' && style.fill !== 'none' ? style.fill : COLORS.soft;
-    const strokeColor = typeof style.stroke === 'string' ? style.stroke : COLORS.foreground;
-    const stroke = style.stroke === 'none' ? null : ({ color: strokeColor, width: typeof style.strokeWidth === 'number' ? style.strokeWidth : 1, dash: null } satisfies Stroke);
+    const fill = style.fill === 'none' ? 'none' : resolveDesignToken(style.fill, COLORS.soft);
+    const strokeColor = resolveDesignToken(style.stroke, COLORS.foreground);
+    const dashValue = Array.isArray(style.lineDash) ? style.lineDash : Array.isArray(style.dash) ? style.dash : null;
+    const stroke = style.stroke === 'none' ? null : ({ color: strokeColor, width: typeof style.strokeWidth === 'number' ? style.strokeWidth : 1, dash: dashValue ? dashValue.map(Number).filter(Number.isFinite) : null } satisfies Stroke);
     let path: string | null = rectPath(w, h);
-    let shapeFill: Fill | null = style.fill === 'none' ? null : { type: 'solid', color: fill };
+    let shapeFill: Fill | null = style.fill === 'none' || type === 'line' || type === 'connector' || type === 'arrow' || type === 'bracket' || type === 'arc' ? null : { type: 'solid', color: fill };
     if (type === 'circle' || type === 'ellipse' || type === 'ring') {
       const rx = w / 2, ry = h / 2;
       path = `M ${rx} 0 A ${rx} ${ry} 0 1 0 ${rx} ${h} A ${rx} ${ry} 0 1 0 ${rx} 0 Z`;
@@ -1001,6 +1020,15 @@ function renderShapeComposition(
         ? `M 0 ${h / 2} L ${Math.max(0, w - Math.min(14, w * .18))} ${h / 2} M ${Math.max(0, w - Math.min(14, w * .18))} ${Math.max(0, h / 2 - Math.min(8, h * .35))} L ${w} ${h / 2} L ${Math.max(0, w - Math.min(14, w * .18))} ${Math.min(h, h / 2 + Math.min(8, h * .35))}`
         : `M 0 ${h / 2} L ${w} ${h / 2}`;
       shapeFill = null;
+    } else if (type === 'bracket') {
+      const side = content.side === 'left' ? 'left' : content.side === 'top' ? 'top' : content.side === 'bottom' ? 'bottom' : 'right';
+      path = side === 'left' ? 'M ' + w + ' 0 L 0 0 L 0 ' + h + ' L ' + w + ' ' + h : side === 'top' ? 'M 0 ' + h + ' L 0 0 L ' + w + ' 0 L ' + w + ' ' + h : side === 'bottom' ? 'M 0 0 L 0 ' + h + ' L ' + w + ' ' + h + ' L ' + w + ' 0' : 'M 0 0 L ' + w + ' 0 L ' + w + ' ' + h + ' L 0 ' + h;
+      shapeFill = null;
+    } else if (type === 'arc') {
+      path = 'M ' + (w * .08) + ' ' + (h * .85) + ' A ' + (w * .42) + ' ' + (h * .75) + ' 0 0 1 ' + (w * .92) + ' ' + (h * .85);
+      shapeFill = null;
+    } else if (type === 'image') {
+      path = roundedRectPath(w, h, typeof style.radius === 'number' ? style.radius : 8);
     } else if (type === 'polygon' && Array.isArray(item.points)) {
       const points = item.points.filter((p): p is Record<string, unknown> => isRecord(p));
       if (points.length >= 3) path = points.map((p, i) => `${i ? 'L' : 'M'} ${(typeof p.x === 'number' ? p.x : 0) * w} ${(typeof p.y === 'number' ? p.y : 0) * h}`).join(' ') + ' Z';
@@ -1009,10 +1037,13 @@ function renderShapeComposition(
     }
     const rawText = typeof content.text === 'string' ? content.text : typeof content.value === 'string' ? content.value : typeof item.text === 'string' ? item.text : '';
     const isText = type === 'text' || rawText.length > 0;
-    const text = isText ? textBody(rawText, typeof style.fontSize === 'number' ? style.fontSize : 16,
-      typeof style.color === 'string' ? style.color : COLORS.foreground,
+    const metadata = ACTIVE_PRESENTATION_META;
+    const scale = typeof style.fontScale === 'number' && Number.isFinite(style.fontScale) ? style.fontScale : typeof metadata.fontScale === 'number' && Number.isFinite(metadata.fontScale) ? metadata.fontScale : 1;
+    const fontSize = Math.max(6, (typeof style.fontSize === 'number' && Number.isFinite(style.fontSize) ? style.fontSize : 16) * scale);
+    const text = isText ? textBody(rawText, fontSize,
+      resolveDesignToken(style.color, COLORS.foreground),
       style.textAlign === 'left' || style.textAlign === 'center' ? style.textAlign : 'right',
-      style.fontWeight === 'bold') : null;
+      style.fontWeight === 'bold' || (typeof style.fontWeight === 'number' && style.fontWeight >= 600)) : null;
     const shapeElement = shape(x, y, w, h, type === 'text' ? null : path, type === 'text' ? null : shapeFill, stroke, text, typeof item.id === 'string' ? item.id : `composition-element-${index}`);
     shapeElement.rot = num('rotation');
     elements.push(shapeElement);
@@ -1045,7 +1076,8 @@ function contentSlide(source: ReferenceSlideInput, deck: ReferenceDeckInput): Sl
   const visual = isRecord(source.visual) ? source.visual : {};
   const data = isRecord(visual.data) ? visual.data : {};
   const canvas = isRecord(data.canvas) ? data.canvas : {};
-  const fullscreen = source.layout === 'graphic-fullscreen' || canvas.fullscreen === true || canvas.mode === 'fullscreen';
+  const layoutConfig = isRecord(source.layoutConfig) ? source.layoutConfig : {};
+  const fullscreen = ['graphic-fullscreen','full-bleed','shape-composition'].includes(String(source.layout)) || layoutConfig.fullscreen === true || canvas.fullscreen === true || canvas.mode === 'fullscreen';
   if (fullscreen && visual.type === 'shape-composition') {
     renderShapeComposition(visual, elements, { x: 0, y: 0, w: ACTIVE_WIDTH, h: ACTIVE_HEIGHT });
     return {
@@ -1059,10 +1091,21 @@ function contentSlide(source: ReferenceSlideInput, deck: ReferenceDeckInput): Sl
   const contentY = contentHeader(source, elements);
   const contentHeight = ACTIVE_HEIGHT - contentY - 54;
   if (slideHasValidVisual(source)) {
-    addBodyText(source, elements, { x: 650, y: contentY, w: 566, h: contentHeight });
-    addVisual(source, elements, { x: 64, y: contentY, w: 548, h: contentHeight });
+    const layout = String(source.layout ?? 'content');
+    const side = layoutConfig.visualSide === 'right' || ['visual-right','image-led-right'].includes(layout) ? 'right' : 'left';
+    const padding = typeof layoutConfig.padding === 'number' && Number.isFinite(layoutConfig.padding) ? Math.max(0, layoutConfig.padding) : 64;
+    const gap = typeof layoutConfig.gap === 'number' && Number.isFinite(layoutConfig.gap) ? Math.max(0, layoutConfig.gap) : 38;
+    const ratio = typeof layoutConfig.visualWidthRatio === 'number' && layoutConfig.visualWidthRatio > .1 && layoutConfig.visualWidthRatio < .9 ? layoutConfig.visualWidthRatio : layout === 'asymmetric-editorial' ? .56 : .48;
+    const available = ACTIVE_WIDTH - padding * 2 - gap;
+    const visualW = available * ratio;
+    const bodyW = available - visualW;
+    const visualX = side === 'left' ? padding : padding + bodyW + gap;
+    const bodyX = side === 'left' ? padding + visualW + gap : padding;
+    addBodyText(source, elements, { x: bodyX, y: contentY, w: bodyW, h: contentHeight });
+    addVisual(source, elements, { x: visualX, y: contentY, w: visualW, h: contentHeight });
   } else {
-    addBodyText(source, elements, { x: 64, y: contentY, w: 1152, h: contentHeight });
+    const padding = typeof layoutConfig.padding === 'number' && Number.isFinite(layoutConfig.padding) ? Math.max(0, layoutConfig.padding) : 64;
+    addBodyText(source, elements, { x: padding, y: contentY, w: ACTIVE_WIDTH - padding * 2, h: contentHeight });
   }
   return {
     background: slideBackground(source, deck),
@@ -1078,7 +1121,7 @@ export function validateReferenceDeck(value: unknown): asserts value is Referenc
   if (!Array.isArray(value.slides) || value.slides.length === 0) {
     throw new Error('کلید «slides» یافت نشد یا آرایه خالی است.');
   }
-  const supportedShapeTypes = new Set(['rectangle','rounded-rectangle','pill','circle','ellipse','ring','triangle','diamond','line','connector','arrow','polygon','text']);
+  const supportedShapeTypes = new Set(['rectangle','rounded-rectangle','pill','circle','ellipse','ring','triangle','diamond','line','connector','arrow','polygon','text','image','bracket','arc','group','custom']);
   value.slides.forEach((slide, index) => {
     if (!isRecord(slide)) throw new Error(`اسلاید شماره ${index + 1} نامعتبر است.`);
     if (!slide.title && !slide.layout) {
@@ -1123,6 +1166,7 @@ export function convertReferenceDeck(value: unknown): { presentation: Presentati
   const dimensions = dimensionsForDeck(value);
   ACTIVE_WIDTH = dimensions.width;
   ACTIVE_HEIGHT = dimensions.height;
+  ACTIVE_PRESENTATION_META = isRecord(value.presentation) ? value.presentation : {};
   const sorted = value.slides.slice().sort((left, right) => {
     const leftOrder = typeof left.order === 'number' ? left.order : 0;
     const rightOrder = typeof right.order === 'number' ? right.order : 0;
