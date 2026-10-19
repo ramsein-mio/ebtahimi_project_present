@@ -74,6 +74,7 @@ export function validatePresentationJson(source: string): ValidationResult {
   } catch (error) {
     return { presentation: null, error: persianError(error) };
   }
+  let warnings: string[] = [];
   try {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       throw new Error('ریشه باید یک شیء باشد.');
@@ -95,6 +96,7 @@ export function validatePresentationJson(source: string): ValidationResult {
     // their existing import path unchanged.
     if (canonical) {
       const validation = parseCanonicalPresentation(source);
+      warnings = validation.warnings.map((issue) => `${issue.path}: ${issue.message}`);
       if (!validation.valid) {
         const issues = validation.errors.slice(0, 8).map((issue) => `${issue.path}: ${issue.message}`);
         const remainder = validation.errors.length > issues.length
@@ -133,6 +135,7 @@ export function validatePresentationJson(source: string): ValidationResult {
       error: null,
       suggestedTitle: converted?.title,
       inputFormat: canonical || converted ? 'reference' : 'web-ppt',
+      ...(warnings.length ? { warnings } : {}),
     };
   } catch (error) {
     return { presentation: null, error: persianError(error) };
