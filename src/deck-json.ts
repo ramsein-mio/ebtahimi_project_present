@@ -171,6 +171,11 @@ function resolveSlideTheme(deck: ReferenceDeckInput, source: ReferenceSlideInput
     palette: palette.length ? palette : [...DEFAULT_COLORS.palette],
   };
   FONT = fonts ? [...fonts] : ['Vazirmatn', 'Tahoma', 'Arial'];
+  if (isRecord(theme.semanticColors)) {
+    for (const [key, value] of Object.entries(theme.semanticColors)) {
+      if (typeof value === 'string' && value.trim()) (COLORS as unknown as Record<string, unknown>)[key] = value;
+    }
+  }
 }
 
 function slideBackground(source: ReferenceSlideInput, deck: ReferenceDeckInput): Fill {
@@ -288,7 +293,7 @@ function paragraph(
     marL: 0,
     indent: 0,
     bullet: null,
-    lineHeight: 2.0,
+    lineHeight: typeof ACTIVE_PRESENTATION_META.spacingScale === 'number' && Number.isFinite(ACTIVE_PRESENTATION_META.spacingScale) ? Math.max(1, Math.min(3, 2 * ACTIVE_PRESENTATION_META.spacingScale)) : 2.0,
     spaceBefore: 0,
     spaceAfter: 0,
     rtl: true,
