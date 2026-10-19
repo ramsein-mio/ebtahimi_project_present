@@ -133,4 +133,29 @@ describe('canonical presentation contract', () => {
     expect(result.errors.some((issue) => issue.path.endsWith('elements[1].x'))).toBe(true);
     expect(result.errors.some((issue) => issue.path.endsWith('elements[1].w'))).toBe(true);
   });
+  it('rejects shape types that the renderer cannot faithfully draw', () => {
+    const result = validateCanonicalPresentation({
+      ...valid,
+      slides: [{
+        ...slide,
+        visual: {
+          type: 'shape-composition',
+          caption: null,
+          data: { version: 1, elements: [{ id: 'image-a', type: 'image', x: 0.1, y: 0.1, w: 0.3, h: 0.3 }] },
+        },
+      }],
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((issue) => issue.path.endsWith('elements[0].type'))).toBe(true);
+  });
+
+  it('reports visual types that have no renderer instead of treating them as supported', () => {
+    const result = validateCanonicalPresentation({
+      ...valid,
+      slides: [{ ...slide, visual: { type: 'timeline', data: {}, caption: null } }],
+    });
+    expect(result.valid).toBe(true);
+    expect(result.warnings.some((issue) => issue.path === 'slides[0].visual.type')).toBe(true);
+  });
+
 });
