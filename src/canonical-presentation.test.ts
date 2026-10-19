@@ -158,4 +158,20 @@ describe('canonical presentation contract', () => {
     expect(result.warnings.some((issue) => issue.path === 'slides[0].visual.type')).toBe(true);
   });
 
+  it('rejects undeclared shape-composition data fields', () => {
+    const result = validateCanonicalPresentation({
+      ...valid,
+      slides: [{
+        ...slide,
+        visual: {
+          type: 'shape-composition',
+          caption: null,
+          data: { version: 1, elements: [], accidentalField: true },
+        },
+      }],
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((issue) => issue.path === 'slides[0].visual.data.accidentalField')).toBe(true);
+  });
+
 });
