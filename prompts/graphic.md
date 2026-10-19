@@ -14,7 +14,7 @@ Define one coherent deck theme in `presentation.design` (or root `theme`) and re
 - Use a mix of supported primitives—circles, rounded rectangles, pills, rings, lines, arrows, diamonds, triangles, polygons, and text—not repeated generic cards. Combine shapes to create diagrams, layered compositions, callouts, labels, connectors, and visual grouping.
 - Every non-text shape must specify `style.fill` and `style.stroke` explicitly (use `"none"` when intentionally absent). Give connectors a visible stroke and positive stroke width. Text elements must specify `content.text`, `style.color`, `style.fontSize`, and `style.textAlign`.
 - Line-like shapes (`line`, `connector`, `arrow`) may use zero or signed `w`/`h` to express horizontal, vertical, or diagonal direction. Area shapes require positive `w`/`h`.
-- Do not use unsupported `image`, `group`, or `custom` types, unimplemented visual types, gradients, shadows, or opacity effects. Do not simulate missing assets with huge solid rectangles.
+- Do not use unsupported `image`, `group`, or `custom` types, unimplemented visual types, gradients, or shadows. `opacity` is supported from 0 to 1; `fontWeight` accepts `normal`, `bold`, or numeric 100–900 in steps of 100; `verticalAlign` accepts `top`, `middle`, or `bottom`. Do not simulate missing assets with huge solid rectangles.
 - Avoid clipping, overlaps that obscure text, redundant decorative shapes, oversized empty frames, and empty left-side panels. Every element must serve hierarchy, explanation, or visual balance.
 
 ## Text and fidelity
