@@ -1,3 +1,5 @@
+import { SUPPORTED_COMPOSITION_SHAPE_TYPES } from './shape-composition-contract';
+
 export type CognitiveLoad = 'low' | 'medium' | 'high';
 export type RichTextLine = string | { text: string; details: string };
 export interface CoverageChecklistItem { item: string; slideIds: string[] }
@@ -178,8 +180,14 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
     else {
       exactKeys(visual, VISUAL_KEYS, p + '.visual', errors);
       expectString(visual.type, p + '.visual.type', errors, true);
-      const knownVisuals = ['none','icon-list','bar-chart','line-chart','pie-chart','comparison-grid','table','shape-composition','timeline','flow','image','chart','custom'];
-      if (typeof visual.type === 'string' && !knownVisuals.includes(visual.type)) warnings.push({ path: p + '.visual.type', message: 'Unknown visual type; compiler should use a safe fallback.', expected: knownVisuals.join(' | '), actual: visual.type, severity: 'warning' });
+      const supportedVisuals = ['none','icon-list','bar-chart','line-chart','pie-chart','comparison-grid','table','shape-composition'];
+      if (typeof visual.type === 'string' && !supportedVisuals.includes(visual.type)) warnings.push({
+        path: p + '.visual.type',
+        message: 'This visual type is not implemented by the current renderer; use a supported visual type or none.',
+        expected: supportedVisuals.join(' | '),
+        actual: visual.type,
+        severity: 'warning',
+      });
       if (!isRecord(visual.data)) errors.push({ path: p + '.visual.data', message: 'Visual data must be an object.', expected: 'object', actual: actualType(visual.data), severity: 'error' });
       expectNullableString(visual.caption, p + '.visual.caption', errors);
       if (visual.type === 'shape-composition' && isRecord(visual.data)) {
@@ -197,7 +205,7 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
             expectString(element.id, ep + '.id', errors, true);
             if (typeof element.id === 'string') { if (elementIds.has(element.id)) errors.push({ path: ep + '.id', message: 'Element IDs must be unique.', expected: 'unique ID', actual: element.id, severity: 'error' }); elementIds.add(element.id); }
             expectString(element.type, ep + '.type', errors, true);
-            const supportedShapeTypes = ['rectangle','rounded-rectangle','pill','circle','ellipse','ring','triangle','diamond','line','connector','arrow','polygon','text','image','bracket','arc','group','custom'];
+            const supportedShapeTypes: readonly string[] = SUPPORTED_COMPOSITION_SHAPE_TYPES;
             if (typeof element.type === 'string' && !supportedShapeTypes.includes(element.type)) errors.push({ path: ep + '.type', message: 'Unsupported shape type for the current renderer.', expected: supportedShapeTypes.join(' | '), actual: element.type, severity: 'error' });
             const isLinearShape = ['line', 'connector', 'arrow'].includes(String(element.type));
             for (const key of ['x','y','w','h']) {
