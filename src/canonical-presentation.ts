@@ -265,6 +265,9 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
                   errors.push({ path: ep + '.content.' + key, message: 'Shape content values must be strings.', expected: 'string', actual: actualType(element.content[key]), severity: 'error' });
                 }
               }
+              if (element.content.side != null && !['left', 'right', 'top', 'bottom'].includes(String(element.content.side))) {
+                errors.push({ path: ep + '.content.side', message: 'Unsupported bracket side.', expected: 'left | right | top | bottom', actual: String(element.content.side), severity: 'error' });
+              }
             }
             if (element.type === 'polygon' && (!Array.isArray(element.points) || element.points.length < 3)) {
               errors.push({ path: ep + '.points', message: 'Polygon requires at least three normalized points.', expected: 'array with at least 3 points', actual: actualType(element.points), severity: 'error' });
