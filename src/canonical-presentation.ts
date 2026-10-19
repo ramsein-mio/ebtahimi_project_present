@@ -82,9 +82,10 @@ function exactKeys(value: Record<string, unknown>, expected: string[], path: str
 }
 function validateRenderTheme(value: unknown, path: string, errors: ValidationIssue[]) {
   if (!isRecord(value)) { errors.push({ path, message: 'Theme must be an object.', expected: 'theme object', actual: actualType(value), severity: 'error' }); return; }
-  const colorKeys = ['background','foreground','muted','surface','border','highlight'];
-  for (const key of colorKeys) if (key in value && typeof value[key] !== 'string') errors.push({ path: path + '.' + key, message: 'Theme color must be a string.', expected: 'CSS color string', actual: actualType(value[key]), severity: 'error' });
+  const colorKeys = ['background','foreground','text','muted','surface','soft','border','soft2','highlight','primary','secondary','accent'];
+  for (const key of colorKeys) if (key in value && typeof value[key] !== 'string') errors.push({ path: path + '.' + key, message: 'Theme color must be a string.', expected: 'CSS color string or theme token', actual: actualType(value[key]), severity: 'error' });
   if ('palette' in value && (!Array.isArray(value.palette) || value.palette.some((color) => typeof color !== 'string'))) errors.push({ path: path + '.palette', message: 'Palette must be an array of color strings.', expected: 'string[]', actual: actualType(value.palette), severity: 'error' });
+  if ('semanticColors' in value && (!isRecord(value.semanticColors) || Object.values(value.semanticColors).some((color) => typeof color !== 'string'))) errors.push({ path: path + '.semanticColors', message: 'Semantic colors must map names to strings.', expected: 'Record<string, string>', actual: actualType(value.semanticColors), severity: 'error' });
   if ('fontFamily' in value && !(typeof value.fontFamily === 'string' || Array.isArray(value.fontFamily) && value.fontFamily.every((font) => typeof font === 'string'))) errors.push({ path: path + '.fontFamily', message: 'Font family must be a string or string array.', expected: 'string | string[]', actual: actualType(value.fontFamily), severity: 'error' });
 }
 function validateRenderCanvas(value: unknown, path: string, errors: ValidationIssue[]) {
