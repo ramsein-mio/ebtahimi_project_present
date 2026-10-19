@@ -14,6 +14,7 @@ import {
 } from '@web-ppt/edit-core';
 import { tableCellBody } from './editor/table-model';
 import { convertReferenceDeck, isReferenceDeck } from './deck-json';
+import { parseCanonicalPresentation } from './canonical-presentation';
 import type { ValidationResult } from './types';
 
 export interface TextElementInfo {
@@ -82,9 +83,19 @@ export function validatePresentationJson(source: string): ValidationResult {
       'recapSlides' in rootRecord ||
       (Object.keys(rootRecord).length === 3 && ['presentation', 'slides', 'recapSlides'].every((key) => key in rootRecord))
     );
-    // Keep the supplied JSON intact. The compiler/converter owns interpretation;
-    // strict canonical-schema validation and visual-data rewriting are intentionally
-    // not part of this import path.
+    // A canonical document is validated against the shared contract before it
+    // reaches the legacy-compatible renderer. Non-canonical/native inputs keep
+    // their existing import path unchanged.
+    if (canonical) {
+      const validation = parseCanonicalPresentation(source);
+      if (!validation.valid) {
+        const issues = validation.errors.slice(0, 8).map((issue) => `${issue.path}: ${issue.message}`);
+        const remainder = validation.errors.length > issues.length
+          ? `\nو ${validation.errors.length - issues.length} خطای دیگر.`
+          : '';
+        throw new Error(`ساختار JSON استاندارد نیست:\n${issues.join('\n')}${remainder}`);
+      }
+    }
     const converted = isReferenceDeck(value) ? convertReferenceDeck(value) : null;
     const candidate = (converted?.presentation ?? value) as Partial<Presentation>;
     if (!Number.isFinite(candidate.width) || Number(candidate.width) <= 0) {
