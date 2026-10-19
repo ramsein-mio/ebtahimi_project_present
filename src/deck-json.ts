@@ -10,6 +10,7 @@ import type {
   TextRun,
 } from '@web-ppt/core';
 import { encodePresentationLineName } from './presentation-interactions';
+import { SUPPORTED_COMPOSITION_SHAPE_TYPES } from './shape-composition-contract';
 
 const BASE_WIDTH = 1280;
 const BASE_HEIGHT = 720;
@@ -37,6 +38,7 @@ let COLORS: {
   highlight: string;
   palette: string[];
 } = { ...DEFAULT_COLORS, palette: [...DEFAULT_COLORS.palette] };
+let ACTIVE_THEME_TOKENS: Record<string, string> = {};
 
 const SECTION_LABELS: Record<string, string> = {
   Introduction: 'مقدمه',
@@ -114,9 +116,43 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function colorString(value: unknown, fallback: string): string {
   if (typeof value !== 'string') return fallback;
   const color = value.trim();
-  return /^(#[\da-f]{3,8}|rgba?\([\d\s.,%]+\)|hsla?\([\d\s.,%deg]+\)|transparent)$/i.test(color)
-    ? color
-    : fallback;
+  const isColor = /^(#[\da-f]{3,8}|rgba?\([\d\s.,%]+\)|hsla?\([\d\s.,%deg]+\)|transparent)$/i.test(color)
+    || (/^[a-z][a-z-]*$/i.test(color) && !['theme', 'none', 'inherit', 'initial', 'unset'].includes(color.toLowerCase()));
+  return isColor ? color : fallback;
+}
+
+function configuredThemeColor(value: unknown, fallback: string, theme: Record<string, unknown>): string {
+  if (typeof value !== 'string') return fallback;
+  const raw = value.trim();
+  if (!raw) return fallback;
+  if (raw === 'theme' || raw === 'theme.background') {
+    const background = theme.background;
+    return typeof background === 'string' && background !== raw
+      ? colorString(background, fallback)
+      : fallback;
+  }
+  if (!raw.startsWith('theme.')) return colorString(raw, fallback);
+
+  const key = raw.slice('theme.'.length);
+  const palette = Array.isArray(theme.palette) ? theme.palette : [];
+  const semantic = isRecord(theme.semanticColors) ? theme.semanticColors : {};
+  const paletteIndex = key.match(/^palette\.(\d+)$/);
+  if (paletteIndex) return colorString(palette[Number(paletteIndex[1])], fallback);
+
+  const aliases: Record<string, unknown> = {
+    foreground: theme.foreground ?? theme.text,
+    text: theme.text ?? theme.foreground,
+    surface: theme.surface ?? theme.soft,
+    soft: theme.soft ?? theme.surface,
+    border: theme.border ?? theme.soft2,
+    soft2: theme.soft2 ?? theme.border,
+    primary: palette[0],
+    secondary: palette[1] ?? palette[0],
+    accent: palette[2] ?? palette[0],
+  };
+  const candidate = theme[key] ?? semantic[key] ?? aliases[key];
+  if (typeof candidate !== 'string' || candidate === raw || candidate.startsWith('theme.')) return fallback;
+  return colorString(candidate, fallback);
 }
 
 function dimensionsForDeck(value: ReferenceDeckInput): { width: number; height: number } {
@@ -138,21 +174,38 @@ function dimensionsForDeck(value: ReferenceDeckInput): { width: number; height: 
 function resolveSlideTheme(deck: ReferenceDeckInput, source: ReferenceSlideInput): void {
   const metadata = isRecord(deck.presentation) ? deck.presentation : {};
   const rootTheme = isRecord(deck.theme) ? deck.theme : {};
-  const metadataTheme = isRecord(metadata.design) ? metadata.design : isRecord(metadata.theme) ? metadata.theme : {};
+  const metadataTheme = {
+    ...(isRecord(metadata.theme) ? metadata.theme : {}),
+    ...(isRecord(metadata.design) ? metadata.design : {}),
+  };
   const slideTheme = isRecord(source.theme) ? source.theme : {};
-  const theme = { ...rootTheme, ...metadataTheme, ...slideTheme };
-  ACTIVE_PRESENTATION_META = { ...metadata, direction: slideTheme.direction ?? metadata.direction ?? metadataTheme.direction, fontScale: slideTheme.fontScale ?? metadata.fontScale ?? metadataTheme.fontScale, spacingScale: slideTheme.spacingScale ?? metadata.spacingScale ?? metadataTheme.spacingScale };
-  if (Array.isArray(metadata.palette)) theme.palette = metadata.palette;
-  if (isRecord(metadata.semanticColors)) theme.semanticColors = metadata.semanticColors;
+  const theme: Record<string, unknown> = { ...rootTheme, ...metadataTheme, ...slideTheme };
+  if (Array.isArray(metadata.palette) && !Array.isArray(metadataTheme.palette) && !Array.isArray(slideTheme.palette)) {
+    theme.palette = metadata.palette;
+  }
+  const semanticColors = {
+    ...(isRecord(metadata.semanticColors) ? metadata.semanticColors : {}),
+    ...(isRecord(rootTheme.semanticColors) ? rootTheme.semanticColors : {}),
+    ...(isRecord(metadataTheme.semanticColors) ? metadataTheme.semanticColors : {}),
+    ...(isRecord(slideTheme.semanticColors) ? slideTheme.semanticColors : {}),
+  };
+  if (Object.keys(semanticColors).length) theme.semanticColors = semanticColors;
+  ACTIVE_PRESENTATION_META = {
+    ...metadata,
+    direction: slideTheme.direction ?? metadataTheme.direction ?? metadata.direction ?? rootTheme.direction,
+    fontScale: slideTheme.fontScale ?? metadataTheme.fontScale ?? metadata.fontScale ?? rootTheme.fontScale,
+    spacingScale: slideTheme.spacingScale ?? metadataTheme.spacingScale ?? metadata.spacingScale ?? rootTheme.spacingScale,
+  };
   const rootCanvas = isRecord(deck.canvas) ? deck.canvas : {};
   const metadataCanvas = isRecord(metadata.canvas) ? metadata.canvas : {};
   const visual = isRecord(source.visual) ? source.visual : {};
   const data = isRecord(visual.data) ? visual.data : {};
   const canvas = isRecord(data.canvas) ? data.canvas : {};
   const slideBackground = isRecord(source.background) ? source.background.color : source.background;
-  const background = colorString(
+  const background = configuredThemeColor(
     slideBackground ?? canvas.background ?? metadata.background ?? metadataCanvas.background ?? rootCanvas.background ?? theme.background,
     DEFAULT_COLORS.background,
+    theme,
   );
   const palette = Array.isArray(theme.palette)
     ? theme.palette.map((color) => colorString(color, '')).filter(Boolean)
@@ -164,17 +217,32 @@ function resolveSlideTheme(deck: ReferenceDeckInput, source: ReferenceSlideInput
       : null;
   COLORS = {
     background,
-    foreground: colorString(theme.foreground, DEFAULT_COLORS.foreground),
-    muted: colorString(theme.muted, DEFAULT_COLORS.muted),
-    soft: colorString(theme.surface, DEFAULT_COLORS.soft),
-    soft2: colorString(theme.border, DEFAULT_COLORS.soft2),
-    highlight: colorString(theme.highlight, DEFAULT_COLORS.highlight),
+    foreground: configuredThemeColor(theme.foreground ?? theme.text, DEFAULT_COLORS.foreground, theme),
+    muted: configuredThemeColor(theme.muted, DEFAULT_COLORS.muted, theme),
+    soft: configuredThemeColor(theme.surface ?? theme.soft, DEFAULT_COLORS.soft, theme),
+    soft2: configuredThemeColor(theme.border ?? theme.soft2, DEFAULT_COLORS.soft2, theme),
+    highlight: configuredThemeColor(theme.highlight, DEFAULT_COLORS.highlight, theme),
     palette: palette.length ? palette : [...DEFAULT_COLORS.palette],
   };
   FONT = fonts ? [...fonts] : ['Vazirmatn', 'Tahoma', 'Arial'];
+  ACTIVE_THEME_TOKENS = {
+    background: COLORS.background,
+    foreground: COLORS.foreground,
+    text: COLORS.foreground,
+    muted: COLORS.muted,
+    surface: COLORS.soft,
+    soft: COLORS.soft,
+    border: COLORS.soft2,
+    soft2: COLORS.soft2,
+    highlight: COLORS.highlight,
+    primary: configuredThemeColor('theme.primary', COLORS.palette[0] ?? COLORS.foreground, theme),
+    secondary: configuredThemeColor('theme.secondary', COLORS.palette[1] ?? COLORS.palette[0] ?? COLORS.foreground, theme),
+    accent: configuredThemeColor('theme.accent', COLORS.palette[2] ?? COLORS.palette[0] ?? COLORS.foreground, theme),
+  };
   if (isRecord(theme.semanticColors)) {
     for (const [key, value] of Object.entries(theme.semanticColors)) {
-      if (typeof value === 'string' && value.trim()) (COLORS as unknown as Record<string, unknown>)[key] = value;
+      const resolved = configuredThemeColor(value, '', theme);
+      if (resolved) ACTIVE_THEME_TOKENS[key] = resolved;
     }
   }
 }
@@ -190,7 +258,7 @@ function slideBackground(source: ReferenceSlideInput, deck: ReferenceDeckInput):
   const canvas = isRecord(data.canvas) ? data.canvas : {};
   const explicit = isRecord(source.background) ? source.background.color : source.background;
   const value = explicit ?? canvas.background ?? metadata.background ?? metadataCanvas.background ?? rootCanvas.background ?? metadataTheme.background ?? rootTheme.background ?? COLORS.background;
-  return { type: 'solid', color: colorString(value, COLORS.background) };
+  return { type: 'solid', color: resolveDesignToken(value, COLORS.background) };
 }
 
 function isLineObject(value: unknown): value is LineObject {
@@ -969,13 +1037,12 @@ function renderGrid(
 function resolveDesignToken(value: unknown, fallback: string): string {
   if (typeof value !== 'string') return fallback;
   const raw = value.trim();
+  if (raw === 'theme') return ACTIVE_THEME_TOKENS.background ?? fallback;
   if (!raw.startsWith('theme.')) return colorString(raw, fallback);
   const key = raw.slice('theme.'.length);
-  const semantic = (COLORS as unknown as Record<string, unknown>)[key];
-  if (typeof semantic === 'string') return semantic;
   const match = key.match(/^palette\.(\d+)$/);
-  if (match) return COLORS.palette[Number(match[1]) % Math.max(1, COLORS.palette.length)] ?? fallback;
-  return fallback;
+  if (match) return COLORS.palette[Number(match[1])] ?? fallback;
+  return ACTIVE_THEME_TOKENS[key] ?? fallback;
 }
 
 function renderShapeComposition(
@@ -1013,7 +1080,16 @@ function renderShapeComposition(
     const fill = style.fill === 'none' ? 'none' : resolveDesignToken(style.fill, COLORS.soft);
     const strokeColor = resolveDesignToken(style.stroke, COLORS.foreground);
     const dashValue = Array.isArray(style.lineDash) ? style.lineDash : Array.isArray(style.dash) ? style.dash : null;
-    const stroke = style.stroke === 'none' ? null : ({ color: strokeColor, width: typeof style.strokeWidth === 'number' ? style.strokeWidth : 1, dash: dashValue ? dashValue.map(Number).filter(Number.isFinite) : null } satisfies Stroke);
+    const defaultsToStroke = ['line', 'connector', 'arrow', 'bracket', 'arc', 'ring'].includes(type) || style.fill === 'none';
+    const hasStroke = typeof style.stroke === 'string' ? style.stroke !== 'none' : defaultsToStroke;
+    const requestedStrokeWidth = typeof style.strokeWidth === 'number' && Number.isFinite(style.strokeWidth) && style.strokeWidth > 0
+      ? Math.min(24, style.strokeWidth)
+      : null;
+    const stroke = hasStroke ? ({
+      color: strokeColor,
+      width: requestedStrokeWidth ?? (isLinearShape ? 2 : 1),
+      dash: dashValue ? dashValue.map(Number).filter((n) => Number.isFinite(n) && n > 0) : null,
+    } satisfies Stroke) : null;
     let path: string | null = rectPath(w, h);
     let shapeFill: Fill | null = style.fill === 'none' || type === 'line' || type === 'connector' || type === 'arrow' || type === 'bracket' || type === 'arc' ? null : { type: 'solid', color: fill };
     if (type === 'circle' || type === 'ellipse' || type === 'ring') {
@@ -1149,7 +1225,7 @@ export function validateReferenceDeck(value: unknown): asserts value is Referenc
   if (!Array.isArray(value.slides) || value.slides.length === 0) {
     throw new Error('کلید «slides» یافت نشد یا آرایه خالی است.');
   }
-  const supportedShapeTypes = new Set(['rectangle','rounded-rectangle','pill','circle','ellipse','ring','triangle','diamond','line','connector','arrow','polygon','text','image','bracket','arc','group','custom']);
+  const supportedShapeTypes = new Set<string>(SUPPORTED_COMPOSITION_SHAPE_TYPES);
   value.slides.forEach((slide, index) => {
     if (!isRecord(slide)) throw new Error(`اسلاید شماره ${index + 1} نامعتبر است.`);
     if (!slide.title && !slide.layout) {
