@@ -1080,7 +1080,7 @@ function renderShapeComposition(
     const fill = style.fill === 'none' ? 'none' : resolveDesignToken(style.fill, COLORS.soft);
     const strokeColor = resolveDesignToken(style.stroke, COLORS.foreground);
     const dashValue = Array.isArray(style.lineDash) ? style.lineDash : Array.isArray(style.dash) ? style.dash : null;
-    const defaultsToStroke = ['line', 'connector', 'arrow', 'bracket', 'arc', 'ring'].includes(type) || style.fill === 'none';
+    const defaultsToStroke = type !== 'text' && (['line', 'connector', 'arrow', 'bracket', 'arc', 'ring'].includes(type) || style.fill === 'none');
     const hasStroke = typeof style.stroke === 'string' ? style.stroke !== 'none' : defaultsToStroke;
     const requestedStrokeWidth = typeof style.strokeWidth === 'number' && Number.isFinite(style.strokeWidth) && style.strokeWidth > 0
       ? Math.min(24, style.strokeWidth)
@@ -1131,13 +1131,12 @@ function renderShapeComposition(
     } else if (type === 'arc') {
       path = 'M ' + (w * .08) + ' ' + (h * .85) + ' A ' + (w * .42) + ' ' + (h * .75) + ' 0 0 1 ' + (w * .92) + ' ' + (h * .85);
       shapeFill = null;
-    } else if (type === 'image') {
-      path = roundedRectPath(w, h, typeof style.radius === 'number' ? style.radius : 8);
     } else if (type === 'polygon' && Array.isArray(item.points)) {
       const points = item.points.filter((p): p is Record<string, unknown> => isRecord(p));
       if (points.length >= 3) path = points.map((p, i) => `${i ? 'L' : 'M'} ${(typeof p.x === 'number' ? p.x : 0) * w} ${(typeof p.y === 'number' ? p.y : 0) * h}`).join(' ') + ' Z';
-    } else if (!['rectangle','rounded-rectangle','pill','circle','ellipse','ring','triangle','diamond','line','connector','arrow','polygon','text','image','bracket','arc'].includes(type)) {
-      path = rectPath(w, h);
+    } else if (!SUPPORTED_COMPOSITION_SHAPE_TYPES.includes(type as typeof SUPPORTED_COMPOSITION_SHAPE_TYPES[number])) {
+      // Validation normally prevents this. Keep a defensive guard for direct callers.
+      continue;
     }
     const rawText = typeof content.text === 'string' ? content.text : typeof content.value === 'string' ? content.value : typeof item.text === 'string' ? item.text : '';
     const isText = type === 'text' || rawText.length > 0;
@@ -1181,7 +1180,18 @@ function contentSlide(source: ReferenceSlideInput, deck: ReferenceDeckInput): Sl
   const data = isRecord(visual.data) ? visual.data : {};
   const canvas = isRecord(data.canvas) ? data.canvas : {};
   const layoutConfig = isRecord(source.layoutConfig) ? source.layoutConfig : {};
-  const fullscreen = ['graphic-fullscreen','full-bleed','shape-composition'].includes(String(source.layout)) || layoutConfig.fullscreen === true || canvas.fullscreen === true || canvas.mode === 'fullscreen';
+  const metadata = isRecord(deck.presentation) ? deck.presentation : {};
+  const metadataCanvas = isRecord(metadata.canvas) ? metadata.canvas : {};
+  const rootCanvas = isRecord(deck.canvas) ? deck.canvas : {};
+  const fullscreen =
+    ['graphic-fullscreen', 'full-bleed', 'shape-composition'].includes(String(source.layout)) ||
+    layoutConfig.fullscreen === true ||
+    canvas.fullscreen === true ||
+    canvas.mode === 'fullscreen' ||
+    metadataCanvas.fullscreen === true ||
+    metadataCanvas.mode === 'fullscreen' ||
+    rootCanvas.fullscreen === true ||
+    rootCanvas.mode === 'fullscreen';
   if (fullscreen && visual.type === 'shape-composition') {
     renderShapeComposition(visual, elements, { x: 0, y: 0, w: ACTIVE_WIDTH, h: ACTIVE_HEIGHT });
     return {
