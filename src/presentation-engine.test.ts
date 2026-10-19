@@ -238,4 +238,25 @@ describe('چرخهٔ JSON تا ذخیره و بازگشایی', () => {
     expect(extraMetadataKey.presentation).toBeNull();
     expect(extraMetadataKey.error).toContain('extraMetadata');
   });
+  it('returns a warning when a canonical layout falls back to standard content', () => {
+    const result = validatePresentationJson(JSON.stringify({
+      presentation: {
+        title: 'Layout warning', subtitle: null, language: 'fa', theme: 'modern',
+        targetAudience: 'students', estimatedTotalDurationSeconds: 30,
+        learningObjectives: [], coverageChecklist: [], teachingRoadmap: [],
+      },
+      slides: [{
+        id: 'slide-01', order: 1, section: 'Introduction', layout: 'timeline',
+        title: 'Timeline fallback', subtitle: null,
+        body: { lead: 'Content remains readable', bullets: [], emphasis: '' },
+        visual: { type: 'none', data: {}, caption: null },
+        speakerNotes: '', durationSeconds: 30, psychologicalPurpose: 'orient',
+        cognitiveLoad: 'low', sourceReference: '',
+      }],
+      recapSlides: [],
+    }));
+    expect(result.error).toBeNull();
+    expect(result.warnings?.some((warning) => warning.includes('slides[0].layout'))).toBe(true);
+  });
+
 });
