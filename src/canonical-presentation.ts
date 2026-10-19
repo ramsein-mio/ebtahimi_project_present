@@ -31,8 +31,6 @@ export interface CanonicalSlide {
   cognitiveLoad: CognitiveLoad; sourceReference: string;
 }
 export interface CanonicalPresentation {
-  theme?: RenderTheme;
-  canvas?: RenderCanvas;
   presentation: {
     title: string; subtitle: string | null; language: string; theme: string;
     design?: RenderTheme; canvas?: RenderCanvas; background?: string;
@@ -129,7 +127,7 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
     if ('palette' in meta && meta.palette != null && (!Array.isArray(meta.palette) || meta.palette.some((c) => typeof c !== 'string'))) errors.push({ path: 'presentation.palette', message: 'Palette must be an array of strings.', expected: 'string[]', actual: actualType(meta.palette), severity: 'error' });
     if ('semanticColors' in meta && meta.semanticColors != null && !isRecord(meta.semanticColors)) errors.push({ path: 'presentation.semanticColors', message: 'semanticColors must be an object.', expected: 'record of color strings', actual: actualType(meta.semanticColors), severity: 'error' });
     if ('layoutDefaults' in meta && meta.layoutDefaults != null && !isRecord(meta.layoutDefaults)) errors.push({ path: 'presentation.layoutDefaults', message: 'layoutDefaults must be an object.', expected: 'object', actual: actualType(meta.layoutDefaults), severity: 'error' });
-    if ('background' in meta && typeof meta.background !== 'string') errors.push({ path: 'presentation.background', message: 'Background must be a color string.', expected: 'CSS color string', actual: actualType(meta.background), severity: 'error' });
+    if ('background' in meta && meta.background != null && typeof meta.background !== 'string') errors.push({ path: 'presentation.background', message: 'Background must be a color string.', expected: 'CSS color string', actual: actualType(meta.background), severity: 'error' });
     expectNullableString(meta.subtitle, 'presentation.subtitle', errors);
     if (typeof meta.estimatedTotalDurationSeconds !== 'number' || !Number.isFinite(meta.estimatedTotalDurationSeconds) || meta.estimatedTotalDurationSeconds <= 0)
       errors.push({ path: 'presentation.estimatedTotalDurationSeconds', message: 'Duration must be a positive finite number.', expected: 'number > 0', actual: actualType(meta.estimatedTotalDurationSeconds), severity: 'error' });
@@ -146,7 +144,7 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
     exactKeys(slide, SLIDE_KEYS, p, errors, ['background','theme']);
     if ('theme' in slide && slide.theme != null) validateRenderTheme(slide.theme, p + '.theme', errors);
     if ('layoutConfig' in slide && slide.layoutConfig != null && !isRecord(slide.layoutConfig)) errors.push({ path: p + '.layoutConfig', message: 'layoutConfig must be an object or null.', expected: 'object | null', actual: actualType(slide.layoutConfig), severity: 'error' });
-    if ('background' in slide && !(typeof slide.background === 'string' || isRecord(slide.background) && (slide.background.color === undefined || typeof slide.background.color === 'string'))) errors.push({ path: p + '.background', message: 'Slide background must be a color string or color object.', expected: 'string | { color: string }', actual: actualType(slide.background), severity: 'error' });
+    if ('background' in slide && slide.background != null && !(typeof slide.background === 'string' || isRecord(slide.background) && (slide.background.color === undefined || typeof slide.background.color === 'string'))) errors.push({ path: p + '.background', message: 'Slide background must be a color string or color object.', expected: 'string | { color: string }', actual: actualType(slide.background), severity: 'error' });
     for (const key of ['id','section','layout','title','speakerNotes','psychologicalPurpose','sourceReference']) expectString(slide[key], p + '.' + key, errors, key === 'id' || key === 'title');
     expectNullableString(slide.subtitle, p + '.subtitle', errors);
     if (typeof slide.id === 'string') { if (ids.has(slide.id)) errors.push({ path: p + '.id', message: 'Slide IDs must be unique.', expected: 'unique ID', actual: slide.id, severity: 'error' }); ids.add(slide.id); }
