@@ -141,7 +141,7 @@ function resolveSlideTheme(deck: ReferenceDeckInput, source: ReferenceSlideInput
   const metadataTheme = isRecord(metadata.design) ? metadata.design : isRecord(metadata.theme) ? metadata.theme : {};
   const slideTheme = isRecord(source.theme) ? source.theme : {};
   const theme = { ...rootTheme, ...metadataTheme, ...slideTheme };
-  ACTIVE_PRESENTATION_META = { ...metadata, direction: slideTheme.direction ?? metadata.direction ?? metadataTheme.direction, fontScale: slideTheme.fontScale ?? metadata.fontScale ?? metadataTheme.fontScale, spacingScale: metadata.spacingScale };
+  ACTIVE_PRESENTATION_META = { ...metadata, direction: slideTheme.direction ?? metadata.direction ?? metadataTheme.direction, fontScale: slideTheme.fontScale ?? metadata.fontScale ?? metadataTheme.fontScale, spacingScale: slideTheme.spacingScale ?? metadata.spacingScale ?? metadataTheme.spacingScale };
   if (Array.isArray(metadata.palette)) theme.palette = metadata.palette;
   if (isRecord(metadata.semanticColors)) theme.semanticColors = metadata.semanticColors;
   const rootCanvas = isRecord(deck.canvas) ? deck.canvas : {};
