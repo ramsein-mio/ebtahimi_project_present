@@ -162,7 +162,7 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
   slides.forEach((slide, i) => {
     const p = 'slides[' + i + ']';
     if (!isRecord(slide)) { errors.push({ path: p, message: 'Slide must be an object.', expected: 'object', actual: actualType(slide), severity: 'error' }); return; }
-    exactKeys(slide, SLIDE_KEYS, p, errors, ['background','theme']);
+    exactKeys(slide, SLIDE_KEYS, p, errors, ['background','theme','layoutConfig']);
     if ('theme' in slide && slide.theme != null) validateRenderTheme(slide.theme, p + '.theme', errors);
     if ('layoutConfig' in slide && slide.layoutConfig != null && !isRecord(slide.layoutConfig)) errors.push({ path: p + '.layoutConfig', message: 'layoutConfig must be an object or null.', expected: 'object | null', actual: actualType(slide.layoutConfig), severity: 'error' });
     if ('background' in slide && slide.background != null && !(typeof slide.background === 'string' || isRecord(slide.background) && (slide.background.color === undefined || typeof slide.background.color === 'string'))) errors.push({ path: p + '.background', message: 'Slide background must be a color string or color object.', expected: 'string | { color: string }', actual: actualType(slide.background), severity: 'error' });
