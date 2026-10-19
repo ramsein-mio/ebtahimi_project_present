@@ -264,6 +264,9 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
                 }
               }
             }
+            if (element.type === 'polygon' && (!Array.isArray(element.points) || element.points.length < 3)) {
+              errors.push({ path: ep + '.points', message: 'Polygon requires at least three normalized points.', expected: 'array with at least 3 points', actual: actualType(element.points), severity: 'error' });
+            }
             if ('points' in element && element.points != null) {
               if (!Array.isArray(element.points)) errors.push({ path: ep + '.points', message: 'Polygon points must be an array.', expected: 'array of normalized points', actual: actualType(element.points), severity: 'error' });
               else element.points.forEach((point, k) => {
