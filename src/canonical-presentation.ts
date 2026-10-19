@@ -167,6 +167,14 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
     if ('layoutConfig' in slide && slide.layoutConfig != null && !isRecord(slide.layoutConfig)) errors.push({ path: p + '.layoutConfig', message: 'layoutConfig must be an object or null.', expected: 'object | null', actual: actualType(slide.layoutConfig), severity: 'error' });
     if ('background' in slide && slide.background != null && !(typeof slide.background === 'string' || isRecord(slide.background) && (slide.background.color === undefined || typeof slide.background.color === 'string'))) errors.push({ path: p + '.background', message: 'Slide background must be a color string or color object.', expected: 'string | { color: string }', actual: actualType(slide.background), severity: 'error' });
     for (const key of ['id','section','layout','title','speakerNotes','psychologicalPurpose','sourceReference']) expectString(slide[key], p + '.' + key, errors, key === 'id' || key === 'title');
+    const supportedLayouts = ['title','content','visual-right','image-led-right','asymmetric-editorial','graphic-fullscreen','full-bleed','shape-composition'];
+    if (typeof slide.layout === 'string' && !supportedLayouts.includes(slide.layout)) warnings.push({
+      path: p + '.layout',
+      message: 'Unknown layout; renderer will use its standard content layout.',
+      expected: supportedLayouts.join(' | '),
+      actual: slide.layout,
+      severity: 'warning',
+    });
     expectNullableString(slide.subtitle, p + '.subtitle', errors);
     if (typeof slide.id === 'string') { if (ids.has(slide.id)) errors.push({ path: p + '.id', message: 'Slide IDs must be unique.', expected: 'unique ID', actual: slide.id, severity: 'error' }); ids.add(slide.id); }
     if (typeof slide.order !== 'number' || !Number.isInteger(slide.order) || slide.order < 1) errors.push({ path: p + '.order', message: 'Order must be a positive integer.', expected: 'integer >= 1', actual: actualType(slide.order), severity: 'error' });
