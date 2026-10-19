@@ -79,9 +79,16 @@ export function validatePresentationJson(source: string): ValidationResult {
       throw new Error('ریشه باید یک شیء باشد.');
     }
     const rootRecord = isRecordValue(value) ? value : null;
+    const hasCanonicalSlideShape = rootRecord !== null
+      && Array.isArray(rootRecord.slides)
+      && rootRecord.slides.some((slide) => isRecordValue(slide)
+        && 'id' in slide
+        && 'cognitiveLoad' in slide
+        && 'sourceReference' in slide);
     const canonical = rootRecord !== null && (
       'recapSlides' in rootRecord ||
-      (Object.keys(rootRecord).length === 3 && ['presentation', 'slides', 'recapSlides'].every((key) => key in rootRecord))
+      (Object.keys(rootRecord).length === 3 && ['presentation', 'slides', 'recapSlides'].every((key) => key in rootRecord)) ||
+      hasCanonicalSlideShape
     );
     // A canonical document is validated against the shared contract before it
     // reaches the legacy-compatible renderer. Non-canonical/native inputs keep
