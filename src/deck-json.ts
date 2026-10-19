@@ -141,6 +141,7 @@ function resolveSlideTheme(deck: ReferenceDeckInput, source: ReferenceSlideInput
   const metadataTheme = isRecord(metadata.design) ? metadata.design : isRecord(metadata.theme) ? metadata.theme : {};
   const slideTheme = isRecord(source.theme) ? source.theme : {};
   const theme = { ...rootTheme, ...metadataTheme, ...slideTheme };
+  ACTIVE_PRESENTATION_META = { ...metadata, direction: slideTheme.direction ?? metadata.direction ?? metadataTheme.direction, fontScale: slideTheme.fontScale ?? metadata.fontScale ?? metadataTheme.fontScale, spacingScale: metadata.spacingScale };
   if (Array.isArray(metadata.palette)) theme.palette = metadata.palette;
   if (isRecord(metadata.semanticColors)) theme.semanticColors = metadata.semanticColors;
   const rootCanvas = isRecord(deck.canvas) ? deck.canvas : {};
@@ -296,7 +297,7 @@ function paragraph(
     lineHeight: typeof ACTIVE_PRESENTATION_META.spacingScale === 'number' && Number.isFinite(ACTIVE_PRESENTATION_META.spacingScale) ? Math.max(1, Math.min(3, 2 * ACTIVE_PRESENTATION_META.spacingScale)) : 2.0,
     spaceBefore: 0,
     spaceAfter: 0,
-    rtl: true,
+    rtl: ACTIVE_PRESENTATION_META.direction === 'ltr' ? false : true,
     runs,
   };
 }
