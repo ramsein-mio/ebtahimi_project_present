@@ -18,6 +18,8 @@ export interface RenderTheme {
 export interface RenderCanvas {
   width?: number; height?: number; aspectRatio?: string; background?: string;
   fullscreen?: boolean; mode?: string;
+  safeArea?: { top?: number; right?: number; bottom?: number; left?: number };
+  [key: string]: unknown;
 }
 export interface CanonicalSlide {
   id: string; order: number; section: string; layout: string; title: string;
