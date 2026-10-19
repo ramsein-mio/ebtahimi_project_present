@@ -219,6 +219,12 @@ describe('چرخهٔ JSON تا ذخیره و بازگشایی', () => {
     expect(valid.error).toBeNull();
     expect(valid.presentation?.slides).toHaveLength(1);
 
+    const missingRecap = { ...base } as Record<string, unknown>;
+    delete missingRecap.recapSlides;
+    const missingRecapResult = validatePresentationJson(JSON.stringify(missingRecap));
+    expect(missingRecapResult.presentation).toBeNull();
+    expect(missingRecapResult.error).toContain('recapSlides');
+
     const extraRootKey = validatePresentationJson(JSON.stringify({ ...base, mode: 'teaching' }));
     expect(extraRootKey.presentation).toBeNull();
     expect(extraRootKey.error).toContain('mode');
