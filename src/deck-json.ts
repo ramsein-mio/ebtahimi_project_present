@@ -1159,7 +1159,8 @@ function renderShapeComposition(
     const isText = type === 'text' || rawText.length > 0;
     const metadata = ACTIVE_PRESENTATION_META;
     const scale = typeof style.fontScale === 'number' && Number.isFinite(style.fontScale) ? style.fontScale : typeof metadata.fontScale === 'number' && Number.isFinite(metadata.fontScale) ? metadata.fontScale : 1;
-    const fontSize = Math.max(6, (typeof style.fontSize === 'number' && Number.isFinite(style.fontSize) ? style.fontSize : 16) * scale);
+    const rawFontSize = typeof style.fontSize === 'number' && Number.isFinite(style.fontSize) ? style.fontSize : 16;
+    const fontSize = Math.max(6, (rawFontSize > 0 && rawFontSize <= 1 ? rawFontSize * ACTIVE_HEIGHT : rawFontSize) * scale);
     const text = isText ? textBody(rawText, fontSize,
       applyElementOpacity(resolveDesignToken(style.color, COLORS.foreground), opacity),
       style.textAlign === 'left' || style.textAlign === 'center' ? style.textAlign : 'right',
