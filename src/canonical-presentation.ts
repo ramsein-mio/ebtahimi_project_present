@@ -253,9 +253,7 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
               if ('endArrow' in style && style.endArrow != null && typeof style.endArrow !== 'boolean') {
                 errors.push({ path: ep + '.style.endArrow', message: 'endArrow must be boolean.', expected: 'boolean', actual: actualType(style.endArrow), severity: 'error' });
               }
-              if ('arrowhead' in style && style.arrowhead != null && !['start', 'end', 'both', 'none'].includes(String(style.arrowhead))) {
-                errors.push({ path: ep + '.style.arrowhead', message: 'Unsupported arrowhead setting.', expected: 'start | end | both | none', actual: String(style.arrowhead), severity: 'error' });
-              }
+              
             }
             if ('content' in element && element.content != null && !isRecord(element.content)) errors.push({ path: ep + '.content', message: 'Shape content must be an object or null.', expected: 'object | null', actual: actualType(element.content), severity: 'error' });
             else if (isRecord(element.content)) {
