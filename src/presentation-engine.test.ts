@@ -72,6 +72,7 @@ describe('چرخهٔ JSON تا ذخیره و بازگشایی', () => {
       { type: 'table', data: { headers: ['الف'], rows: [['مقدار']] } },
     ];
     const result = validatePresentationJson(JSON.stringify({
+      presentation: { title: 'Chart regression', language: 'en' },
       slides: visuals.map((visual, index) => ({
         order: index + 1,
         layout: 'content',
