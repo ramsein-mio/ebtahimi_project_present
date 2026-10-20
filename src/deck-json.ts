@@ -872,6 +872,22 @@ function renderIconList(
   });
 }
 
+function chartLocale(): string | undefined {
+  const locale = ACTIVE_PRESENTATION_META.locale;
+  return typeof locale === 'string' && locale.trim() ? locale : undefined;
+}
+function formatChartNumber(value: number, maxFractionDigits = 2): string {
+  try {
+    return new Intl.NumberFormat(chartLocale(), { maximumFractionDigits: maxFractionDigits }).format(value);
+  } catch {
+    return String(value);
+  }
+}
+function formatChartValue(value: number, unit: string): string {
+  const formatted = formatChartNumber(value);
+  if (!unit) return formatted;
+  return unit === '%' ? formatted + '%' : formatted + ' ' + unit;
+}
 function renderBarChart(
   visual: Record<string, unknown>,
   elements: SlideElement[],
@@ -879,24 +895,57 @@ function renderBarChart(
 ): void {
   const data = isRecord(visual.data) ? visual.data : {};
   const series = Array.isArray(data.series) ? data.series.filter(isRecord) : [];
-  const values = series.length && Array.isArray(series[0].values) ? series[0].values.filter(isRecord) : [];
-  if (!values.length) return;
+  const categories = series.length && Array.isArray(series[0].values) ? series[0].values.filter(isRecord) : [];
+  if (!categories.length || !series.length) return;
+
   const captionSpace = visualCaption(visual.caption, elements, frame);
-  const area = { x: frame.x + 24, y: frame.y + 22, w: frame.w - 48, h: frame.h - 44 - captionSpace };
-  const max = Math.max(1, ...values.map((item) => Number(item.value) || 0));
-  const rowHeight = area.h / values.length;
-  const isPercent = stringValue(data.yAxisLabel).includes('درصد');
-  values.forEach((item, index) => {
-    const rowY = area.y + rowHeight * index;
-    const value = Number(item.value) || 0;
-    const color = colorString(item.color, colorString(series[0]?.color, COLORS.palette[index % COLORS.palette.length]));
-    elements.push(textBox(area.x + 100, rowY, area.w - 100, rowHeight * .42, item.label, 14, COLORS.foreground, 'right', true));
-    elements.push(textBox(area.x, rowY, 92, rowHeight * .42, `${value}${isPercent ? '%' : ''}`, 14, COLORS.foreground, 'left', true));
-    const trackY = rowY + rowHeight * .53;
-    elements.push(rectangle(area.x, trackY, area.w, 10, COLORS.soft, 5));
-    const fillW = Math.max(3, area.w * Math.max(0, value) / max);
-    elements.push(rectangle(area.x + area.w - fillW, trackY, fillW, 10, color, 5, null, `bar-${index + 1}`));
+  const legendHeight = series.length > 1 ? 30 : 8;
+  const area = { x: frame.x + 20, y: frame.y + 16 + legendHeight, w: frame.w - 40, h: Math.max(60, frame.h - 34 - legendHeight - captionSpace) };
+  const flatValues = series.flatMap((item) => Array.isArray(item.values) ? item.values.filter(isRecord).map((v) => Number(v.value)).filter(Number.isFinite) : []);
+  let min = Math.min(0, ...flatValues);
+  let max = Math.max(0, ...flatValues);
+  if (min === max) max = min + 1;
+  const span = max - min;
+  const plotX = area.x + 78;
+  const plotW = Math.max(24, area.w - 100);
+  const zeroX = plotX + ((0 - min) / span) * plotW;
+  const groupH = area.h / categories.length;
+  const unit = typeof data.unit === 'string' ? data.unit : '';
+  if (series.length > 1) {
+    series.forEach((item, index) => {
+      const label = typeof item.name === 'string' && item.name.trim() ? item.name : `Series ${index + 1}`;
+      const color = resolveDesignToken(item.color, COLORS.palette[index % COLORS.palette.length]);
+      const lx = area.x + area.w - (index + 1) * Math.min(128, area.w / series.length);
+      elements.push(rectangle(lx, frame.y + 9, 9, 9, color, 4));
+      elements.push(textBox(lx - 4, frame.y + 3, Math.min(110, area.w / series.length - 12), 22, label, 10, COLORS.foreground, 'right'));
+    });
+  }
+  categories.forEach((category, categoryIndex) => {
+    const groupY = area.y + categoryIndex * groupH;
+    elements.push(textBox(area.x, groupY, 72, Math.max(20, groupH * .35), category.label, 12, COLORS.foreground, 'right', true));
+    if (categoryIndex > 0) elements.push(rectangle(plotX, groupY, plotW, 1, COLORS.soft2, 0));
+    const innerY = groupY + Math.max(18, groupH * .34);
+    const availableH = Math.max(4, groupH - Math.max(18, groupH * .34) - 2);
+    const barGap = series.length > 1 ? 2 : 0;
+    const barH = Math.max(3, Math.min(13, (availableH - barGap * (series.length - 1)) / series.length));
+    series.forEach((item, seriesIndex) => {
+      const values = Array.isArray(item.values) ? item.values.filter(isRecord) : [];
+      const point = values[categoryIndex];
+      if (!point || typeof point.value !== 'number' || !Number.isFinite(point.value)) return;
+      const value = point.value;
+      const valueX = plotX + ((value - min) / span) * plotW;
+      const x = Math.min(zeroX, valueX);
+      const width = Math.max(1, Math.abs(valueX - zeroX));
+      const y = innerY + seriesIndex * (barH + barGap);
+      const colorFallback = typeof item.color === 'string' ? item.color : COLORS.palette[seriesIndex % COLORS.palette.length];
+      const color = resolveDesignToken(point.color ?? colorFallback, COLORS.palette[seriesIndex % COLORS.palette.length]);
+      elements.push(rectangle(plotX, y + barH / 2 - 1, plotW, 2, COLORS.soft, 1));
+      elements.push(rectangle(x, y, width, barH, color, Math.min(4, barH / 2), null, `bar-${seriesIndex + 1}-${categoryIndex + 1}`));
+      elements.push(textBox(area.x, y - 1, 72, barH + 2, formatChartValue(value, unit), 10, COLORS.foreground, 'left', true));
+    });
   });
+  // Draw a visible zero baseline even when all values share one sign.
+  elements.push(rectangle(zeroX - .5, area.y, 1, area.h, COLORS.soft2, 0));
 }
 
 function renderLineChart(
@@ -908,7 +957,7 @@ function renderLineChart(
   const series = Array.isArray(data.series) ? data.series.filter(isRecord) : [];
   const parsed = series.map((item) => ({
     name: stringValue(item.name),
-    color: colorString(item.color, ''),
+    color: typeof item.color === 'string' ? resolveDesignToken(item.color, '') : '',
     points: Array.isArray(item.points) ? item.points.filter(isRecord) : [],
   })).filter((item) => item.points.length > 0);
   if (!parsed.length) return;
@@ -919,85 +968,57 @@ function renderLineChart(
   const area = {
     x: frame.x + 58,
     y: frame.y + 24 + legendHeight,
-    w: frame.w - 84,
-    h: frame.h - 58 - captionSpace - legendHeight - axisLabelHeight,
+    w: Math.max(30, frame.w - 84),
+    h: Math.max(40, frame.h - 58 - captionSpace - legendHeight - axisLabelHeight),
   };
   const allValues = parsed.flatMap((item) => item.points.map((point) => Number(point.y)).filter(Number.isFinite));
-  const minValue = Math.min(0, ...allValues);
-  const maxValue = Math.max(1, ...allValues);
-  const valueSpan = Math.max(1, maxValue - minValue);
+  let minValue = Math.min(0, ...allValues);
+  let maxValue = Math.max(0, ...allValues);
+  if (minValue === maxValue) { minValue -= 0.5; maxValue += 0.5; }
+  const valueSpan = maxValue - minValue;
+  const numericX = parsed.every((item) => item.points.every((point) => typeof point.x === 'number' && Number.isFinite(point.x)));
+  const allX = numericX ? parsed.flatMap((item) => item.points.map((point) => Number(point.x))) : [];
+  const minX = allX.length ? Math.min(...allX) : 0;
+  const maxX = allX.length ? Math.max(...allX) : 1;
+  const xSpan = maxX - minX;
   const longest = Math.max(...parsed.map((item) => item.points.length));
-  const xFor = (index: number, count: number) => area.x + (count <= 1 ? area.w / 2 : index * area.w / (count - 1));
+  const xFor = (point: Record<string, unknown>, index: number, count: number) => {
+    if (numericX) return area.x + (xSpan === 0 ? area.w / 2 : (Number(point.x) - minX) / xSpan * area.w);
+    return area.x + (count <= 1 ? area.w / 2 : index * area.w / (count - 1));
+  };
   const yFor = (value: number) => area.y + area.h - (value - minValue) / valueSpan * area.h;
-
   for (let index = 0; index <= 4; index += 1) {
     const y = area.y + area.h * index / 4;
     const value = maxValue - valueSpan * index / 4;
-    elements.push(shape(
-      area.x,
-      y,
-      area.w,
-      1,
-      rectPath(area.w, 1),
-      { type: 'solid', color: index === 4 ? COLORS.soft2 : COLORS.soft },
-      null,
-      null,
-      `line-grid-${index}`,
-    ));
-    elements.push(textBox(frame.x + 10, y - 11, 42, 22, String(Math.round(value * 10) / 10), 10, COLORS.muted, 'left'));
+    elements.push(shape(area.x,y,area.w,1,rectPath(area.w,1),{type:'solid',color:index===4?COLORS.soft2:COLORS.soft},null,null,`line-grid-${index}`));
+    elements.push(textBox(frame.x + 4,y - 11,48,22,formatChartNumber(value),10,COLORS.muted,'left'));
   }
-
   parsed.forEach((item, seriesIndex) => {
     const color = item.color || COLORS.palette[seriesIndex % COLORS.palette.length];
-    const points = item.points.map((point, pointIndex) => ({
-      x: xFor(pointIndex, item.points.length),
-      y: yFor(Number(point.y) || 0),
-      label: stringValue(point.x),
+    const points = item.points.map((point,index) => ({
+      x: xFor(point,index,item.points.length),
+      y: yFor(Number(point.y)),
+      label: numericX ? formatChartNumber(Number(point.x)) : stringValue(point.x),
     }));
     if (points.length > 1) {
-      const path = points.map((point, index) => `${index ? 'L' : 'M'} ${point.x - area.x} ${point.y - area.y}`).join(' ');
-      elements.push(shape(
-        area.x,
-        area.y,
-        area.w,
-        area.h,
-        path,
-        null,
-        { color, width: 3, dash: null, cap: 'round', join: 'round' },
-        null,
-        `line-series-${seriesIndex + 1}`,
-      ));
+      const path=points.map((point,index)=>`${index?'L':'M'} ${point.x-area.x} ${point.y-area.y}`).join(' ');
+      elements.push(shape(area.x,area.y,area.w,area.h,path,null,{color,width:3,dash:null,cap:'round',join:'round'},null,`line-series-${seriesIndex+1}`));
     }
-    points.forEach((point, pointIndex) => {
-      elements.push(shape(
-        point.x - 5,
-        point.y - 5,
-        10,
-        10,
-        'M 5 0 A 5 5 0 1 1 4.999 0 Z',
-        { type: 'solid', color },
-        { color: COLORS.background, width: 2, dash: null },
-        null,
-        `line-point-${seriesIndex + 1}-${pointIndex + 1}`,
-      ));
-    });
+    points.forEach((point,pointIndex)=>elements.push(shape(point.x-5,point.y-5,10,10,'M 5 0 A 5 5 0 1 1 4.999 0 Z',{type:'solid',color},{color:COLORS.background,width:2,dash:null},null,`line-point-${seriesIndex+1}-${pointIndex+1}`)));
   });
-
-  const labels = parsed.find((item) => item.points.length === longest)?.points ?? parsed[0].points;
-  labels.forEach((point, index) => {
-    const x = xFor(index, labels.length);
-    elements.push(textBox(x - 38, area.y + area.h + 7, 76, 24, point.x, 10, COLORS.muted, 'center'));
+  const labels=parsed.find((item)=>item.points.length===longest)?.points??parsed[0].points;
+  labels.forEach((point,index)=>{
+    const x=xFor(point,index,labels.length);
+    const label=numericX?formatChartNumber(Number(point.x)):stringValue(point.x);
+    elements.push(textBox(x-38,area.y+area.h+7,76,24,label,10,COLORS.muted,'center'));
   });
-  if (data.xAxisLabel) elements.push(textBox(area.x, area.y + area.h + 28, area.w, 22, data.xAxisLabel, 10, COLORS.muted, 'center'));
-  if (data.yAxisLabel) elements.push(textBox(frame.x + 4, frame.y + 8, 120, 22, data.yAxisLabel, 10, COLORS.muted, 'left'));
-
-  if (parsed.length > 1) {
-    parsed.forEach((item, index) => {
-      const x = frame.x + frame.w - 28 - index * 124;
-      elements.push(rectangle(x - 10, frame.y + 25, 10, 10, item.color || COLORS.palette[index % COLORS.palette.length], 5));
-      elements.push(textBox(x - 112, frame.y + 17, 96, 26, item.name || `سری ${index + 1}`, 10, COLORS.foreground, 'right'));
-    });
-  }
+  if (data.xAxisLabel) elements.push(textBox(area.x,area.y+area.h+28,area.w,22,data.xAxisLabel,10,COLORS.muted,'center'));
+  if (data.yAxisLabel) elements.push(textBox(frame.x+4,frame.y+8,120,22,data.yAxisLabel,10,COLORS.muted,'left'));
+  if (parsed.length>1) parsed.forEach((item,index)=>{
+    const x=frame.x+frame.w-28-index*124;
+    elements.push(rectangle(x-10,frame.y+25,10,10,item.color||COLORS.palette[index%COLORS.palette.length],5));
+    elements.push(textBox(x-112,frame.y+17,96,26,item.name||`Series ${index+1}`,10,COLORS.foreground,'right'));
+  });
 }
 
 function polar(cx: number, cy: number, radius: number, angle: number): [number, number] {
@@ -1027,38 +1048,33 @@ function renderPieChart(
   if (!slices.length) return;
   const captionSpace = visualCaption(visual.caption, elements, frame);
   const contentH = frame.h - captionSpace;
-  const size = Math.min(270, contentH - 42, frame.w * .54);
+  const size = Math.max(80, Math.min(270, contentH - 42, frame.w * .54));
   const boxX = frame.x + 28;
   const boxY = frame.y + 18;
-  const cx = size / 2;
-  const cy = size / 2;
-  const outer = size * .4;
-  const inner = size * .24;
-  const total = slices.reduce((sum, item) => sum + Math.max(0, Number(item.value) || 0), 0) || 1;
-  let angle = -Math.PI / 2;
-  slices.forEach((item, index) => {
-    const next = angle + Math.max(0, Number(item.value) || 0) / total * Math.PI * 2;
-    elements.push(shape(
-      boxX,
-      boxY,
-      size,
-      size,
-      donutPath(cx, cy, outer, inner, angle, next),
-      { type: 'solid', color: colorString(item.color, COLORS.palette[index % COLORS.palette.length]) },
-      { color: COLORS.background, width: 2, dash: null },
-      null,
-      `pie-slice-${index + 1}`,
-    ));
-    angle = next;
+  const cx = size / 2, cy = size / 2;
+  const outer = size * .4, inner = size * .24;
+  const total = slices.reduce((sum,item)=>sum+Math.max(0,typeof item.value==='number'?item.value:Number(item.value)||0),0);
+  if (total <= 0) return;
+  const unit = typeof data.unit === 'string' ? data.unit.trim() : '%';
+  let angle=-Math.PI/2;
+  slices.forEach((item,index)=>{
+    const value=Math.max(0,typeof item.value==='number'?item.value:Number(item.value)||0);
+    const next=angle+value/total*Math.PI*2;
+    elements.push(shape(boxX,boxY,size,size,donutPath(cx,cy,outer,inner,angle,next),{type:'solid',color:resolveDesignToken(item.color,COLORS.palette[index%COLORS.palette.length])},{color:COLORS.background,width:2,dash:null},null,`pie-slice-${index+1}`));
+    angle=next;
   });
-  const legendX = boxX + size + 10;
-  const legendW = frame.x + frame.w - 22 - legendX;
-  const rowHeight = Math.min(48, (contentH - 36) / slices.length);
-  slices.forEach((item, index) => {
-    const y = frame.y + 25 + rowHeight * index;
-    elements.push(rectangle(legendX + legendW - 13, y + 13, 10, 10, colorString(item.color, COLORS.palette[index % COLORS.palette.length]), 5));
-    elements.push(textBox(legendX + 52, y, legendW - 70, rowHeight, item.label, 12, COLORS.foreground, 'right'));
-    elements.push(textBox(legendX, y, 50, rowHeight, `${stringValue(item.value)}%`, 12, COLORS.foreground, 'left', true));
+  const legendX=boxX+size+10;
+  const legendW=frame.x+frame.w-22-legendX;
+  const rowHeight=Math.min(48,(contentH-36)/slices.length);
+  slices.forEach((item,index)=>{
+    const y=frame.y+25+rowHeight*index;
+    const rawValue=typeof item.value==='number'?item.value:Number(item.value)||0;
+    const labelValue=unit==='%'||unit.toLowerCase()==='percent'||unit.toLowerCase()==='percentage'
+      ? formatChartNumber(rawValue/total*100,1)+'%'
+      : formatChartValue(rawValue,unit);
+    elements.push(rectangle(legendX+legendW-13,y+13,10,10,resolveDesignToken(item.color,COLORS.palette[index%COLORS.palette.length]),5));
+    elements.push(textBox(legendX+52,y,Math.max(12,legendW-70),rowHeight,item.label,12,COLORS.foreground,'right'));
+    elements.push(textBox(legendX,y,50,rowHeight,labelValue,11,COLORS.foreground,'left',true));
   });
 }
 
