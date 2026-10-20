@@ -244,7 +244,7 @@ function validateVisualDataContract(type: string, data: Record<string, unknown>,
           exactKeys(rawPoint, ['label','value','color'], pointPath, errors, ['color']);
           expectString(rawPoint.label, pointPath + '.label', errors, true);
           if (typeof rawPoint.label === 'string') labels.push(rawPoint.label);
-          if (typeof rawPoint.value !== 'number' || !Number.isFinite(rawPoint.value) || rawPoint.value < 0) errors.push({ path: pointPath + '.value', message: 'Bar values must be finite and non-negative.', expected: 'finite number >= 0', actual: actualType(rawPoint.value), severity: 'error' });
+          if (typeof rawPoint.value !== 'number' || !Number.isFinite(rawPoint.value) || rawPoint.value < 0 || rawPoint.value > 1e12) errors.push({ path: pointPath + '.value', message: 'Bar values must be finite and non-negative.', expected: 'finite number >= 0', actual: actualType(rawPoint.value), severity: 'error' });
           validateOptionalColor(rawPoint, pointPath);
         });
         if (referenceLabels === null) referenceLabels = labels;
@@ -263,7 +263,7 @@ function validateVisualDataContract(type: string, data: Record<string, unknown>,
         if (!isRecord(rawSeries)) { errors.push({ path: seriesPath, message: 'Chart series must be an object.', expected: 'object', actual: actualType(rawSeries), severity: 'error' }); return; }
         exactKeys(rawSeries, ['name','color','points'], seriesPath, errors, ['name','color']);
         optionalText(rawSeries, 'name', seriesPath); validateOptionalColor(rawSeries, seriesPath);
-        if (!Array.isArray(rawSeries.points) || rawSeries.points.length < 1 || rawSeries.points.length > 1000) { errors.push({ path: seriesPath + '.points', message: 'Line series must contain between 1 and 1000 points.', expected: 'array of 1..1000 points', actual: actualType(rawSeries.points), severity: 'error' }); return; }
+        if (!Array.isArray(rawSeries.points) || rawSeries.points.length < 1 || rawSeries.points.length > 250) { errors.push({ path: seriesPath + '.points', message: 'Line series must contain between 1 and 1000 points.', expected: 'array of 1..1000 points', actual: actualType(rawSeries.points), severity: 'error' }); return; }
         const labels: string[] = [];
         rawSeries.points.forEach((rawPoint, pointIndex) => {
           const pointPath = seriesPath + '.points[' + pointIndex + ']';
@@ -273,13 +273,13 @@ function validateVisualDataContract(type: string, data: Record<string, unknown>,
           if (currentType !== 'string' && currentType !== 'number') errors.push({ path: pointPath + '.x', message: 'X must be a category label or a number.', expected: 'string | finite number', actual: actualType(rawPoint.x), severity: 'error' });
           else {
             if (currentType === 'string') expectString(rawPoint.x, pointPath + '.x', errors, true);
-            else if (!Number.isFinite(rawPoint.x as number)) errors.push({ path: pointPath + '.x', message: 'Numeric X values must be finite.', expected: 'finite number', actual: actualType(rawPoint.x), severity: 'error' });
+            else if (!numberInRange(rawPoint.x, -1e12, 1e12)) errors.push({ path: pointPath + '.x', message: 'Numeric X values must be finite.', expected: 'finite number', actual: actualType(rawPoint.x), severity: 'error' });
             const normalizedType = currentType as 'number' | 'string';
             if (categoryType === null) categoryType = normalizedType;
             else if (categoryType !== normalizedType) errors.push({ path: pointPath + '.x', message: 'Use either numeric X values or category labels in one chart, not both.', expected: categoryType + ' X values', actual: normalizedType, severity: 'error' });
             labels.push(String(rawPoint.x));
           }
-          if (typeof rawPoint.y !== 'number' || !Number.isFinite(rawPoint.y)) errors.push({ path: pointPath + '.y', message: 'Y must be a finite number.', expected: 'finite number', actual: actualType(rawPoint.y), severity: 'error' });
+          if (typeof rawPoint.y !== 'number' || !numberInRange(rawPoint.y, -1e12, 1e12)) errors.push({ path: pointPath + '.y', message: 'Y must be a finite number.', expected: 'finite number', actual: actualType(rawPoint.y), severity: 'error' });
         });
         if (categoryType === 'string') {
           if (categoryLabels === null) categoryLabels = labels;
@@ -299,7 +299,7 @@ function validateVisualDataContract(type: string, data: Record<string, unknown>,
         if (!isRecord(rawSlice)) { errors.push({ path: itemPath, message: 'Pie slice must be an object.', expected: 'object', actual: actualType(rawSlice), severity: 'error' }); return; }
         exactKeys(rawSlice, ['label','value','color'], itemPath, errors, ['color']);
         expectString(rawSlice.label, itemPath + '.label', errors, true);
-        if (typeof rawSlice.value !== 'number' || !Number.isFinite(rawSlice.value) || rawSlice.value < 0) errors.push({ path: itemPath + '.value', message: 'Pie values must be finite and non-negative.', expected: 'finite number >= 0', actual: actualType(rawSlice.value), severity: 'error' });
+        if (typeof rawSlice.value !== 'number' || !Number.isFinite(rawSlice.value) || rawSlice.value < 0 || rawSlice.value > 1e12) errors.push({ path: itemPath + '.value', message: 'Pie values must be finite and non-negative.', expected: 'finite number >= 0', actual: actualType(rawSlice.value), severity: 'error' });
         else total += rawSlice.value;
         validateOptionalColor(rawSlice, itemPath);
       });
@@ -362,17 +362,9 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
     const layoutHeight = typeof metadataCanvas.height === 'number' ? metadataCanvas.height : ratioMatch && Number(ratioMatch[2]) > 0 ? layoutWidth / (Number(ratioMatch[1]) / Number(ratioMatch[2])) : 720;
     if ('layoutDefaults' in meta && meta.layoutDefaults != null) validateLayoutConfig(meta.layoutDefaults, 'presentation.layoutDefaults', errors, layoutWidth, layoutHeight);
     if ('background' in meta && meta.background != null) validateColorValue(meta.background, 'presentation.background', errors);
-    if ('assets' in meta && meta.assets != null) {
-      if (!Array.isArray(meta.assets)) errors.push({ path: 'presentation.assets', message: 'assets must be an array.', expected: 'array of asset definitions', actual: actualType(meta.assets), severity: 'error' });
-      else meta.assets.forEach((asset, index) => {
-        const assetPath = 'presentation.assets[' + index + ']';
-        if (!isRecord(asset)) { errors.push({ path: assetPath, message: 'Asset must be an object.', expected: 'object', actual: actualType(asset), severity: 'error' }); return; }
-        exactKeys(asset, ['id','type','src','alt'], assetPath, errors, ['alt']);
-        expectString(asset.id, assetPath + '.id', errors, true); expectString(asset.src, assetPath + '.src', errors, true);
-        if (!['image','icon','font','svg'].includes(String(asset.type))) errors.push({ path: assetPath + '.type', message: 'Unsupported asset type.', expected: 'image | icon | font | svg', actual: String(asset.type), severity: 'error' });
-        if ('alt' in asset && asset.alt != null) expectString(asset.alt, assetPath + '.alt', errors);
-      });
-    }
+    // Assets are preserved as opaque metadata because the current renderer does not
+    // dereference them yet; do not invent an asset schema or reject future variants.
+    if ('assets' in meta && meta.assets != null && !Array.isArray(meta.assets)) errors.push({ path: 'presentation.assets', message: 'assets must be an array when supplied.', expected: 'array', actual: actualType(meta.assets), severity: 'error' });
     expectNullableString(meta.subtitle, 'presentation.subtitle', errors);
     if (typeof meta.estimatedTotalDurationSeconds !== 'number' || !Number.isFinite(meta.estimatedTotalDurationSeconds) || meta.estimatedTotalDurationSeconds <= 0)
       errors.push({ path: 'presentation.estimatedTotalDurationSeconds', message: 'Duration must be a positive finite number.', expected: 'number > 0', actual: actualType(meta.estimatedTotalDurationSeconds), severity: 'error' });
@@ -453,6 +445,7 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
         }
         if (!Array.isArray(visual.data.elements)) errors.push({ path: p + '.visual.data.elements', message: 'Shape elements must be an array.', expected: 'array', actual: actualType(visual.data.elements), severity: 'error' });
         else {
+          if (visual.data.elements.length > 500) errors.push({ path: p + '.visual.data.elements', message: 'Shape composition exceeds the renderer safety limit.', expected: 'at most 500 elements', actual: String(visual.data.elements.length), severity: 'error' });
           const elementIds = new Set<string>();
           visual.data.elements.forEach((element, j) => {
             const ep = p + '.visual.data.elements[' + j + ']';
