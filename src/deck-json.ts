@@ -933,8 +933,10 @@ function renderBarChart(
   let max = Math.max(0, ...flatValues);
   if (min === max) max = min + 1;
   const span = max - min;
-  const plotX = area.x + 78;
-  const plotW = Math.max(24, area.w - 100);
+  const valueWidth = Math.min(62, Math.max(44, area.w * 0.16));
+  const labelWidth = Math.min(82, Math.max(52, area.w * 0.2));
+  const plotX = area.x + valueWidth;
+  const plotW = Math.max(24, area.w - valueWidth - labelWidth);
   const zeroX = plotX + ((0 - min) / span) * plotW;
   const groupH = area.h / categories.length;
   const unit = typeof data.unit === 'string' ? data.unit : '';
@@ -949,7 +951,7 @@ function renderBarChart(
   }
   categories.forEach((category, categoryIndex) => {
     const groupY = area.y + categoryIndex * groupH;
-    elements.push(textBox(area.x, groupY, 72, Math.max(20, groupH * .35), category.label, 12, COLORS.foreground, 'right', true));
+    elements.push(textBox(plotX + plotW + 3, groupY, labelWidth - 3, Math.max(20, groupH * .35), category.label, 12, COLORS.foreground, 'right', true));
     if (categoryIndex > 0) elements.push(rectangle(plotX, groupY, plotW, 1, COLORS.soft2, 0));
     const innerY = groupY + Math.max(18, groupH * .34);
     const availableH = Math.max(4, groupH - Math.max(18, groupH * .34) - 2);
@@ -968,7 +970,7 @@ function renderBarChart(
       const color = resolveDesignToken(point.color ?? colorFallback, COLORS.palette[seriesIndex % COLORS.palette.length]);
       elements.push(rectangle(plotX, y + barH / 2 - 1, plotW, 2, COLORS.soft, 1));
       elements.push(rectangle(x, y, width, barH, color, Math.min(4, barH / 2), null, `bar-${seriesIndex + 1}-${categoryIndex + 1}`));
-      elements.push(textBox(area.x, y - 1, 72, barH + 2, formatChartValue(value, unit), 10, COLORS.foreground, 'left', true));
+      elements.push(textBox(area.x, y - 1, Math.max(40, valueWidth - 6), barH + 2, formatChartValue(value, unit), 10, COLORS.foreground, 'left', true));
     });
   });
   // Draw a visible zero baseline even when all values share one sign.
