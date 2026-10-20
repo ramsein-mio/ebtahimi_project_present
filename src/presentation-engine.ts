@@ -1,3 +1,4 @@
+import { normalizeFlexiblePresentation } from './flexible-presentation';
 import { renderSlideToSvg, type Presentation, type SlideElement, type TableElement, type TextBody } from '@web-ppt/core';
 import {
   createDoc,
@@ -70,7 +71,7 @@ function removeEmptyVisualPlaceholders(presentation: Presentation): Presentation
 export function validatePresentationJson(source: string): ValidationResult {
   let value: unknown;
   try {
-    value = JSON.parse(source);
+    value = normalizeFlexiblePresentation(JSON.parse(source) as unknown);
   } catch (error) {
     return { presentation: null, error: persianError(error) };
   }
