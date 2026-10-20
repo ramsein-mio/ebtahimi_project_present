@@ -121,7 +121,8 @@ function validateRenderCanvas(value: unknown, path: string, errors: ValidationIs
       const width = typeof value.width === 'number' ? value.width : 1280;
       const ratioMatch = typeof value.aspectRatio === 'string' ? value.aspectRatio.match(/^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/) : null;
       const height = typeof value.height === 'number' ? value.height : ratioMatch && Number(ratioMatch[2]) > 0 ? width / (Number(ratioMatch[1]) / Number(ratioMatch[2])) : 720;
-      for (const edge of ['top','right','bottom','left']) if (edge in value.safeArea && !numberInRange(value.safeArea[edge], 0, Math.min(width, height) / 2)) errors.push({ path: path + '.safeArea.' + edge, message: 'Safe-area inset must be non-negative and no larger than half the shorter canvas edge.', expected: 'bounded non-negative number', actual: actualType(value.safeArea[edge]), severity: 'error' });
+      for (const edge of ['top','bottom']) if (edge in value.safeArea && !numberInRange(value.safeArea[edge], 0, height * 0.25)) errors.push({ path: path + '.safeArea.' + edge, message: 'Vertical safe-area inset must be bounded by 25% of canvas height.', expected: 'number in [0, 25% of height]', actual: actualType(value.safeArea[edge]), severity: 'error' });
+      for (const edge of ['left','right']) if (edge in value.safeArea && !numberInRange(value.safeArea[edge], 0, width * 0.25)) errors.push({ path: path + '.safeArea.' + edge, message: 'Horizontal safe-area inset must be bounded by 25% of canvas width.', expected: 'number in [0, 25% of width]', actual: actualType(value.safeArea[edge]), severity: 'error' });
     }
   }
 }
@@ -189,8 +190,8 @@ function validateLayoutConfig(value: unknown, path: string, errors: ValidationIs
   exactKeys(value, LAYOUT_CONFIG_KEYS, path, errors, LAYOUT_CONFIG_KEYS);
   if ('fullscreen' in value && typeof value.fullscreen !== 'boolean') errors.push({ path: path + '.fullscreen', message: 'fullscreen must be boolean.', expected: 'boolean', actual: actualType(value.fullscreen), severity: 'error' });
   if ('visualSide' in value && !['left','right'].includes(String(value.visualSide))) errors.push({ path: path + '.visualSide', message: 'Unsupported visual side.', expected: 'left | right', actual: String(value.visualSide), severity: 'error' });
-  if ('padding' in value && !numberInRange(value.padding, 0, Math.min(canvasWidth, canvasHeight) / 2)) errors.push({ path: path + '.padding', message: 'Padding must be non-negative and fit within the canvas.', expected: 'number from 0 to half the shorter canvas edge', actual: actualType(value.padding), severity: 'error' });
-  if ('gap' in value && !numberInRange(value.gap, 0, Math.min(canvasWidth, canvasHeight) / 2)) errors.push({ path: path + '.gap', message: 'Gap must be non-negative and fit within the canvas.', expected: 'number from 0 to half the shorter canvas edge', actual: actualType(value.gap), severity: 'error' });
+  if ('padding' in value && !numberInRange(value.padding, 0, Math.min(canvasWidth, canvasHeight) * 0.22)) errors.push({ path: path + '.padding', message: 'Padding exceeds the renderer-safe canvas inset.', expected: 'number in [0, 22% of the shorter canvas edge]', actual: actualType(value.padding), severity: 'error' });
+  if ('gap' in value && !numberInRange(value.gap, 0, Math.min(canvasWidth, canvasHeight) * 0.22)) errors.push({ path: path + '.gap', message: 'Gap exceeds the renderer-safe canvas inset.', expected: 'number in [0, 22% of the shorter canvas edge]', actual: actualType(value.gap), severity: 'error' });
   if ('visualWidthRatio' in value && !numberInRange(value.visualWidthRatio, 0.1, 0.9)) errors.push({ path: path + '.visualWidthRatio', message: 'Visual width ratio must be between 0.1 and 0.9, inclusive.', expected: 'number in [0.1, 0.9]', actual: actualType(value.visualWidthRatio), severity: 'error' });
 }
 
