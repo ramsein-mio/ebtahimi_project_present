@@ -200,7 +200,8 @@ function registeredTheme(id: string): Record<string, unknown> {
 }
 
 function inferredDirection(language: unknown): 'rtl' | 'ltr' {
-  const tag = typeof language === 'string' ? language.toLowerCase() : '';
+  const tag = typeof language === 'string' ? language.toLowerCase().trim() : '';
+  if (!tag) return 'rtl'; // Preserve the Persian-first default for legacy decks.
   return /^(fa|ar|he|ur|ps|sd|ug|yi)(-|$)/.test(tag) ? 'rtl' : 'ltr';
 }
 
