@@ -276,7 +276,7 @@ function resolveSlideTheme(deck: ReferenceDeckInput, source: ReferenceSlideInput
       : null;
   const slideBg = isRecord(source.background) ? source.background.color : source.background;
   const background = configuredThemeColor(
-    slideBg ?? visualCanvas.background ?? metadataCanvas.background ?? rootCanvas.background ?? metadata.background ?? theme.background,
+    slideBg ?? visualCanvas.background ?? metadataCanvas.background ?? rootCanvas.background ?? slideTheme.background ?? metadata.background ?? theme.background,
     DEFAULT_COLORS.background,
     theme,
   );
@@ -636,6 +636,33 @@ function filterEmptyPlaceholders(elements: SlideElement[]): SlideElement[] {
   return elements.filter((element) => !isColorlessPlaceholder(element));
 }
 
+function applyGlobalShadows(elements: SlideElement[]): SlideElement[] {
+  const style = ACTIVE_PRESENTATION_META.shadowStyle;
+  if (style === 'none' || style == null) return elements;
+  const presets = {
+    soft: { dx: 1, dy: 2, alpha: 0.08 },
+    medium: { dx: 2, dy: 3, alpha: 0.13 },
+    strong: { dx: 3, dy: 5, alpha: 0.2 },
+  } as const;
+  const preset = presets[style as keyof typeof presets] ?? presets.soft;
+  const output: SlideElement[] = [];
+  for (const element of elements) {
+    if (element.kind === 'shape' && !element.text && element.fill?.type === 'solid' && element.w >= 28 && element.h >= 14) {
+      output.push({
+        ...element,
+        x: element.x + preset.dx,
+        y: element.y + preset.dy,
+        fill: { type: 'solid', color: `rgba(0, 0, 0, ${preset.alpha})` },
+        stroke: null,
+        text: null,
+        name: element.name ? `shadow:${element.name}` : undefined,
+      });
+    }
+    output.push(element);
+  }
+  return output;
+}
+
 function detailsNotes(slide: ReferenceSlideInput): string {
   const body = isRecord(slide.body) ? slide.body : {};
   const values = [body.lead, ...(Array.isArray(body.bullets) ? body.bullets : []), body.emphasis];
@@ -715,7 +742,7 @@ function titleSlide(source: ReferenceSlideInput, deck: ReferenceDeckInput): Slid
   }
   return {
     background: slideBackground(source, deck),
-    elements: filterEmptyPlaceholders(elements),
+    elements: applyGlobalShadows(filterEmptyPlaceholders(elements)),
     notes: detailsNotes(source),
     layoutName: 'Reference title',
     transition: { type: 'fade', durationMs: 600 },
@@ -1310,7 +1337,7 @@ function contentSlide(source: ReferenceSlideInput, deck: ReferenceDeckInput): Sl
     renderShapeComposition(visual, elements, { x: 0, y: 0, w: ACTIVE_WIDTH, h: ACTIVE_HEIGHT });
     return {
       background: slideBackground(source, deck),
-      elements,
+      elements: applyGlobalShadows(elements),
       notes: detailsNotes(source),
       layoutName: 'Reference graphic fullscreen',
       transition: { type: 'fade', durationMs: 600 },
@@ -1337,7 +1364,7 @@ function contentSlide(source: ReferenceSlideInput, deck: ReferenceDeckInput): Sl
   }
   return {
     background: slideBackground(source, deck),
-    elements: slideHasValidVisual(source) ? elements : filterEmptyPlaceholders(elements),
+    elements: applyGlobalShadows(slideHasValidVisual(source) ? elements : filterEmptyPlaceholders(elements)),
     notes: detailsNotes(source),
     layoutName: slideHasValidVisual(source) ? 'Reference content with visual' : 'Reference content',
     transition: { type: 'fade', durationMs: 600 },
