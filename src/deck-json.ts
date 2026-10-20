@@ -714,19 +714,20 @@ function addReferenceLine(
   options: { bold?: boolean; fill?: string; borderStart?: boolean; name?: string; bullet?: boolean } = {},
 ): void {
   const { x, y, w, h } = frame;
+  const rtl = isRtlLayout();
   if (options.fill) elements.push(rectangle(x, y, w, h, options.fill, 4));
-  if (options.borderStart) elements.push(rectangle(x + w - 5, y, 5, h, COLORS.foreground));
-  if (options.bullet) elements.push(rectangle(x + w - 12, y + h * .43, 7, 7, COLORS.foreground));
+  if (options.borderStart) elements.push(rectangle(rtl ? x + w - 5 : x, y, 5, h, COLORS.foreground));
+  if (options.bullet) elements.push(rectangle(rtl ? x + w - 12 : x + 5, y + h * .43, 7, 7, COLORS.foreground));
   const detailWidth = lineDetails(value) ? 28 : 0;
   elements.push(textBox(
-    x + detailWidth,
+    x + (rtl ? detailWidth : options.bullet ? 19 : 0),
     y,
     w - detailWidth - (options.bullet ? 19 : 0),
     h,
     referenceLineText(value),
     size,
     COLORS.foreground,
-    'right',
+    rtl ? 'right' : 'left',
     Boolean(options.bold),
     encodePresentationLineName(
       options.name ?? 'line',
@@ -734,7 +735,7 @@ function addReferenceLine(
       lineDetails(value),
     ),
   ));
-  if (detailWidth) detailBadge(x + 4, y + Math.max(2, (h - 20) / 2), elements);
+  if (detailWidth) detailBadge(rtl ? x + 4 : x + w - 24, y + Math.max(2, (h - 20) / 2), elements);
 }
 
 function titleSlide(source: ReferenceSlideInput, deck: ReferenceDeckInput): Slide {
@@ -777,8 +778,12 @@ function titleSlide(source: ReferenceSlideInput, deck: ReferenceDeckInput): Slid
 function contentHeader(source: ReferenceSlideInput, elements: SlideElement[]): number {
   const label = sectionLabel(source.section);
   const labelWidth = Math.max(74, Math.min(190, 28 + label.length * 12));
+  const rtl = isRtlLayout();
+  const labelX = rtl ? ACTIVE_WIDTH - 64 - labelWidth : 64;
+  const orderX = rtl ? labelX - 48 : labelX + labelWidth + 10;
+  const align = rtl ? 'right' : 'left';
   elements.push(outlinedTextBox(
-    ACTIVE_WIDTH - 64 - labelWidth,
+    labelX,
     42,
     labelWidth,
     30,
@@ -792,7 +797,7 @@ function contentHeader(source: ReferenceSlideInput, elements: SlideElement[]): n
     'section-tag',
   ));
   elements.push(outlinedTextBox(
-    ACTIVE_WIDTH - 64 - labelWidth - 48,
+    orderX,
     42,
     38,
     30,
@@ -805,10 +810,10 @@ function contentHeader(source: ReferenceSlideInput, elements: SlideElement[]): n
     true,
     'slide-order',
   ));
-  elements.push(textBox(64, 78, 1152, 64, source.title, 31, COLORS.foreground, 'right', true, 'slide-title'));
+  elements.push(textBox(64, 78, 1152, 64, source.title, 31, COLORS.foreground, align, true, 'slide-title'));
   let ruleY = 154;
   if (source.subtitle) {
-    elements.push(textBox(64, 137, 1152, 36, source.subtitle, 17, COLORS.muted, 'right', false, 'slide-subtitle'));
+    elements.push(textBox(64, 137, 1152, 36, source.subtitle, 17, COLORS.muted, align, false, 'slide-subtitle'));
     ruleY = 180;
   }
   elements.push(rectangle(64, ruleY, 1152, 3, COLORS.foreground, 0, null, 'header-rule'));
@@ -1376,7 +1381,10 @@ function addVisual(
     case 'pie-chart': renderPieChart(visual, elements, frame); break;
     case 'comparison-grid': renderGrid(visual, elements, frame, true); break;
     case 'table': renderGrid(visual, elements, frame, false); break;
-    case 'shape-composition': renderShapeComposition(visual, elements, frame); break;
+    case 'shape-composition':
+      renderShapeComposition(visual, elements, frame);
+      visualCaption(visual.caption, elements, frame);
+      break;
   }
 }
 
@@ -1406,12 +1414,14 @@ function contentSlide(source: ReferenceSlideInput, deck: ReferenceDeckInput): Sl
     const right = Math.max(0, Math.min(ACTIVE_WIDTH / 2, Number(safeArea.right) || 0));
     const top = Math.max(0, Math.min(ACTIVE_HEIGHT / 2, Number(safeArea.top) || 0));
     const bottom = Math.max(0, Math.min(ACTIVE_HEIGHT / 2, Number(safeArea.bottom) || 0));
-    renderShapeComposition(visual, elements, {
+    const fullscreenFrame = {
       x: left,
       y: top,
       w: Math.max(1, ACTIVE_WIDTH - left - right),
       h: Math.max(1, ACTIVE_HEIGHT - top - bottom),
-    });
+    };
+    renderShapeComposition(visual, elements, fullscreenFrame);
+    visualCaption(visual.caption, elements, { x: 0, y: 0, w: ACTIVE_WIDTH, h: ACTIVE_HEIGHT });
     return {
       background: slideBackground(source, deck),
       elements: applyGlobalShadows(elements),
@@ -1424,7 +1434,10 @@ function contentSlide(source: ReferenceSlideInput, deck: ReferenceDeckInput): Sl
   const contentHeight = ACTIVE_HEIGHT - contentY - 54;
   if (slideHasValidVisual(source)) {
     const layout = String(source.layout ?? 'content');
-    const side = layoutConfig.visualSide === 'right' || ['visual-right','image-led-right'].includes(layout) ? 'right' : 'left';
+    const namedSide = ['visual-right','image-led-right'].includes(layout) ? 'right' : null;
+    const side = layoutConfig.visualSide === 'left' || layoutConfig.visualSide === 'right'
+      ? layoutConfig.visualSide
+      : namedSide ?? (isRtlLayout() ? 'left' : 'right');
     const padding = typeof layoutConfig.padding === 'number' && Number.isFinite(layoutConfig.padding) ? Math.max(0, Math.min(ACTIVE_WIDTH * .25, layoutConfig.padding)) : 64;
     const gap = typeof layoutConfig.gap === 'number' && Number.isFinite(layoutConfig.gap) ? Math.max(0, Math.min(ACTIVE_WIDTH * .2, layoutConfig.gap)) : 38;
     const ratio = typeof layoutConfig.visualWidthRatio === 'number' && layoutConfig.visualWidthRatio >= .1 && layoutConfig.visualWidthRatio <= .9 ? layoutConfig.visualWidthRatio : layout === 'asymmetric-editorial' ? .56 : .48;
