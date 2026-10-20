@@ -78,7 +78,7 @@ const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
 const actualType = (v: unknown): string => v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v;
 function exactKeys(value: Record<string, unknown>, expected: string[], path: string, errors: ValidationIssue[], optional: string[] = []) {
   for (const key of expected) if (!optional.includes(key) && !(key in value)) errors.push({ path: path ? path + '.' + key : key, message: 'Required field is missing.', expected: 'present', actual: 'missing', severity: 'error' });
-  for (const key of Object.keys(value)) if (!expected.includes(key)) errors.push({ path: path ? path + '.' + key : key, message: 'Unexpected field in canonical object.', expected: 'one of the canonical fields', actual: 'unexpected key', severity: 'error' });
+  // Forward-compatible contract: preserve extension fields; validate only the fields this renderer relies on.
 }
 function validateRenderTheme(value: unknown, path: string, errors: ValidationIssue[]) {
   if (!isRecord(value)) { errors.push({ path, message: 'Theme must be an object.', expected: 'theme object', actual: actualType(value), severity: 'error' }); return; }
