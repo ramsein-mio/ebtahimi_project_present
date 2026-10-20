@@ -433,12 +433,12 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
       exactKeys(visual, VISUAL_KEYS, p + '.visual', errors);
       expectString(visual.type, p + '.visual.type', errors, true);
       const supportedVisuals = SUPPORTED_VISUALS;
-      if (typeof visual.type === 'string' && !supportedVisuals.includes(visual.type)) errors.push({
+      if (typeof visual.type === 'string' && !supportedVisuals.includes(visual.type)) warnings.push({
         path: p + '.visual.type',
-        message: 'This visual type has no registered schema and renderer.',
+        message: 'Unknown visual type; renderer will omit the visual and preserve the slide content.',
         expected: supportedVisuals.join(' | '),
         actual: visual.type,
-        severity: 'error',
+        severity: 'warning',
       });
       if (!isRecord(visual.data)) errors.push({ path: p + '.visual.data', message: 'Visual data must be an object.', expected: 'object', actual: actualType(visual.data), severity: 'error' });
       else if (typeof visual.type === 'string' && supportedVisuals.includes(visual.type)) validateVisualDataContract(visual.type, visual.data, p + '.visual.data', errors);
