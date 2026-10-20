@@ -84,7 +84,7 @@ function exactKeys(value: Record<string, unknown>, expected: string[], path: str
 }
 const THEME_KEYS = [
   'background','foreground','text','muted','surface','soft','border','soft2','highlight',
-  'primary','secondary','accent','palette','fontFamily','fontSize','fontScale','radiusScale',
+  'primary','secondary','accent','palette','fontFamily','fontScale','spacingScale','radiusScale',
   'shadowStyle','direction','contrast','semanticColors',
 ];
 const THEME_COLOR_KEYS = ['background','foreground','text','muted','surface','soft','border','soft2','highlight','primary','secondary','accent'];
@@ -124,6 +124,7 @@ function validateRenderTheme(value: unknown, path: string, errors: ValidationIss
   if ('fontFamily' in value && !(typeof value.fontFamily === 'string' && value.fontFamily.trim().length > 0 || Array.isArray(value.fontFamily) && value.fontFamily.length > 0 && value.fontFamily.every((font) => typeof font === 'string' && font.trim().length > 0))) issue(errors, path + '.fontFamily', 'Font family must be a non-empty string or array.', 'string | non-empty string[]', value.fontFamily);
   if ('fontSize' in value && (typeof value.fontSize !== 'number' || !Number.isFinite(value.fontSize) || value.fontSize < 6 || value.fontSize > 512)) issue(errors, path + '.fontSize', 'fontSize is measured in CSS pixels.', 'number in [6, 512] pixels', value.fontSize);
   if ('fontScale' in value && (typeof value.fontScale !== 'number' || !Number.isFinite(value.fontScale) || value.fontScale < 0.5 || value.fontScale > 2)) issue(errors, path + '.fontScale', 'fontScale must stay within the supported typography scale.', 'number in [0.5, 2]', value.fontScale);
+  if ('spacingScale' in value && (typeof value.spacingScale !== 'number' || !Number.isFinite(value.spacingScale) || value.spacingScale < 0.5 || value.spacingScale > 2)) issue(errors, path + '.spacingScale', 'spacingScale must stay within the supported spacing scale.', 'number in [0.5, 2]', value.spacingScale);
   if ('radiusScale' in value && (typeof value.radiusScale !== 'number' || !Number.isFinite(value.radiusScale) || value.radiusScale < 0.25 || value.radiusScale > 3)) issue(errors, path + '.radiusScale', 'radiusScale must stay within the supported radius scale.', 'number in [0.25, 3]', value.radiusScale);
   if ('shadowStyle' in value && !['none','soft','medium','strong'].includes(String(value.shadowStyle))) issue(errors, path + '.shadowStyle', 'Unsupported shadow style.', 'none | soft | medium | strong', value.shadowStyle);
   if ('contrast' in value && !['normal','high'].includes(String(value.contrast))) issue(errors, path + '.contrast', 'Unsupported contrast mode.', 'normal | high', value.contrast);
