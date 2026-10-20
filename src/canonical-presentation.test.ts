@@ -149,13 +149,13 @@ describe('canonical presentation contract', () => {
     expect(result.errors.some((issue) => issue.path.endsWith('elements[0].type'))).toBe(true);
   });
 
-  it('reports visual types that have no renderer instead of treating them as supported', () => {
+  it('rejects visual types that have no registered renderer', () => {
     const result = validateCanonicalPresentation({
       ...valid,
       slides: [{ ...slide, visual: { type: 'timeline', data: {}, caption: null } }],
     });
-    expect(result.valid).toBe(true);
-    expect(result.warnings.some((issue) => issue.path === 'slides[0].visual.type')).toBe(true);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((issue) => issue.path === 'slides[0].visual.type')).toBe(true);
   });
 
   it('rejects undeclared shape-composition data fields', () => {
@@ -203,6 +203,99 @@ describe('canonical presentation contract', () => {
     });
     expect(result.errors.some((issue) => issue.path.endsWith('.style.opacity'))).toBe(true);
     expect(result.errors.some((issue) => issue.path.endsWith('.style.verticalAlign'))).toBe(true);
+  });
+
+  it('requires unique slide order and preserves the canonical theme-ID contract', () => {
+    const ordered = validateCanonicalPresentation({
+      ...valid,
+      presentation: { ...valid.presentation, theme: 'midnight' },
+      slides: [{ ...slide }, { ...slide, id: 'slide-02', title: 'دوم', order: 1 }],
+    });
+    expect(ordered.errors.some((issue) => issue.path === 'slides[1].order')).toBe(true);
+
+    const knownTheme = validateCanonicalPresentation({
+      ...valid,
+      presentation: { ...valid.presentation, theme: 'midnight' },
+    });
+    expect(knownTheme.errors).toEqual([]);
+    expect(knownTheme.warnings.some((issue) => issue.path === 'presentation.theme')).toBe(false);
+  });
+
+  it('validates chart series, numeric values, table dimensions, and explicit pie units', () => {
+    const mismatchedBars = validateCanonicalPresentation({
+      ...valid,
+      slides: [{
+        ...slide,
+        visual: { type: 'bar-chart', caption: null, data: {
+          unit: '%',
+          series: [
+            { name: 'A', values: [{ label: 'الف', value: 10 }] },
+            { name: 'B', values: [{ label: 'ب', value: 20 }] },
+          ],
+        } },
+      }],
+    });
+    expect(mismatchedBars.valid).toBe(false);
+    expect(mismatchedBars.errors.some((issue) => issue.path === 'slides[0].visual.data.series[1].values')).toBe(true);
+
+    const invalidTable = validateCanonicalPresentation({
+      ...valid,
+      slides: [{ ...slide, visual: { type: 'table', caption: null, data: { headers: ['الف','ب'], rows: [['تنها یک سلول']] } } }],
+    });
+    expect(invalidTable.errors.some((issue) => issue.path === 'slides[0].visual.data.rows[0]')).toBe(true);
+
+    const negativePie = validateCanonicalPresentation({
+      ...valid,
+      slides: [{ ...slide, visual: { type: 'pie-chart', caption: null, data: { unit: 'items', slices: [{ label: 'الف', value: -1 }] } } }],
+    });
+    expect(negativePie.errors.some((issue) => issue.path === 'slides[0].visual.data.slices[0].value')).toBe(true);
+  });
+
+  it('rejects invalid canvas ratios and unknown layoutConfig keys while accepting edge ratios', () => {
+    const badCanvas = validateCanonicalPresentation({
+      ...valid,
+      presentation: { ...valid.presentation, canvas: { aspectRatio: '0:9', width: 0 } },
+    });
+    expect(badCanvas.errors.some((issue) => issue.path === 'presentation.canvas.aspectRatio')).toBe(true);
+    expect(badCanvas.errors.some((issue) => issue.path === 'presentation.canvas.width')).toBe(true);
+
+    const badLayout = validateCanonicalPresentation({
+      ...valid,
+      slides: [{ ...slide, layoutConfig: { visualWidthRatio: 0.5, mysterious: true } }],
+    });
+    expect(badLayout.errors.some((issue) => issue.path === 'slides[0].layoutConfig.mysterious')).toBe(true);
+
+    const edgeRatio = validateCanonicalPresentation({
+      ...valid,
+      slides: [{ ...slide, layoutConfig: { visualWidthRatio: 0.1, padding: 0, gap: 0 } }],
+    });
+    expect(edgeRatio.errors).toEqual([]);
+  });
+
+  it('treats fontSize as pixels and allows explicit zero-width shape strokes', () => {
+    const validStroke = validateCanonicalPresentation({
+      ...valid,
+      slides: [{
+        ...slide,
+        visual: { type: 'shape-composition', caption: null, data: {
+          version: 1,
+          elements: [{ id: 'box', type: 'rectangle', x: 0.1, y: 0.1, w: 0.5, h: 0.3, style: { strokeWidth: 0, fontSize: 24 } }],
+        } },
+      }],
+    });
+    expect(validStroke.valid).toBe(true);
+
+    const invalidFont = validateCanonicalPresentation({
+      ...valid,
+      slides: [{
+        ...slide,
+        visual: { type: 'shape-composition', caption: null, data: {
+          version: 1,
+          elements: [{ id: 'label', type: 'text', x: 0.1, y: 0.1, w: 0.5, h: 0.3, style: { fontSize: 0.09 }, content: { text: 'عنوان' } }],
+        } },
+      }],
+    });
+    expect(invalidFont.errors.some((issue) => issue.path.endsWith('.style.fontSize'))).toBe(true);
   });
 
 });
