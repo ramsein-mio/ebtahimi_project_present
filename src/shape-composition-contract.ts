@@ -39,6 +39,7 @@ export const COMPOSITION_STYLE_KEYS = [
   'stroke',
   'strokeWidth',
   'fontSize',
+  'fontSizeUnit',
   'color',
   'textAlign',
   'fontWeight',
