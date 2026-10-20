@@ -1334,7 +1334,17 @@ function contentSlide(source: ReferenceSlideInput, deck: ReferenceDeckInput): Sl
     rootCanvas.fullscreen === true ||
     rootCanvas.mode === 'fullscreen';
   if (fullscreen && visual.type === 'shape-composition') {
-    renderShapeComposition(visual, elements, { x: 0, y: 0, w: ACTIVE_WIDTH, h: ACTIVE_HEIGHT });
+    const safeArea = isRecord(canvas.safeArea) ? canvas.safeArea : isRecord(metadataCanvas.safeArea) ? metadataCanvas.safeArea : isRecord(rootCanvas.safeArea) ? rootCanvas.safeArea : {};
+    const left = Math.max(0, Math.min(ACTIVE_WIDTH / 2, Number(safeArea.left) || 0));
+    const right = Math.max(0, Math.min(ACTIVE_WIDTH / 2, Number(safeArea.right) || 0));
+    const top = Math.max(0, Math.min(ACTIVE_HEIGHT / 2, Number(safeArea.top) || 0));
+    const bottom = Math.max(0, Math.min(ACTIVE_HEIGHT / 2, Number(safeArea.bottom) || 0));
+    renderShapeComposition(visual, elements, {
+      x: left,
+      y: top,
+      w: Math.max(1, ACTIVE_WIDTH - left - right),
+      h: Math.max(1, ACTIVE_HEIGHT - top - bottom),
+    });
     return {
       background: slideBackground(source, deck),
       elements: applyGlobalShadows(elements),
