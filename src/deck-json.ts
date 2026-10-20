@@ -534,7 +534,7 @@ export function hasValidVisual(visual: unknown): boolean {
       return Array.isArray(headers) && headers.length > 0 && Array.isArray(rows) && rows.length > 0;
     }
     default:
-      return false;
+      return Object.keys(data).length > 0;
   }
 }
 
@@ -1172,6 +1172,54 @@ function renderShapeComposition(
   }
 }
 
+function genericVisualValue(value: unknown): string {
+  if (value == null) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  try { return JSON.stringify(value); } catch { return String(value); }
+}
+
+/** Fallback renderer: unknown visual types stay visible as a readable data panel. */
+function renderGenericVisual(
+  visual: Record<string, unknown>,
+  elements: SlideElement[],
+  frame: { x: number; y: number; w: number; h: number },
+): void {
+  const data = isRecord(visual.data) ? visual.data : {};
+  const caption = visualCaption(visual.caption, elements, frame);
+  const rows: Array<{ label: string; value: string }> = [];
+  for (const [key, raw] of Object.entries(data)) {
+    if (raw == null || key === 'version' || key === 'canvas') continue;
+    if (Array.isArray(raw)) {
+      raw.slice(0, 6).forEach((item, index) => rows.push({
+        label: Array.isArray(item) || isRecord(item) ? `${key} ${index + 1}` : key,
+        value: genericVisualValue(item),
+      }));
+    } else if (isRecord(raw)) {
+      for (const [childKey, childValue] of Object.entries(raw).slice(0, 4)) {
+        rows.push({ label: `${key} · ${childKey}`, value: genericVisualValue(childValue) });
+      }
+    } else {
+      rows.push({ label: key, value: genericVisualValue(raw) });
+    }
+    if (rows.length >= 8) break;
+  }
+  if (!rows.length) rows.push({ label: 'نوع بصری', value: textValueForVisual(visual.type) });
+  const content = { x: frame.x + 16, y: frame.y + 14, w: frame.w - 32, h: Math.max(60, frame.h - 28 - caption) };
+  const rowH = Math.max(28, Math.min(62, content.h / rows.length));
+  rows.slice(0, 8).forEach((row, index) => {
+    const y = content.y + index * rowH;
+    elements.push(rectangle(content.x, y, content.w, Math.max(22, rowH - 7), COLORS.soft, 8, null, `generic-visual-row-${index + 1}`));
+    const labelW = Math.min(content.w * .36, Math.max(72, row.label.length * 7));
+    elements.push(textBox(content.x + content.w - labelW - 8, y + 3, labelW, rowH - 13, row.label.slice(0, 60), 11, COLORS.muted, 'right', true));
+    const value = row.value.length > 180 ? row.value.slice(0, 177) + '…' : row.value;
+    elements.push(textBox(content.x + 8, y + 3, Math.max(30, content.w - labelW - 24), rowH - 13, value, 11, COLORS.foreground, 'right'));
+  });
+}
+function textValueForVisual(value: unknown): string {
+  return value == null ? 'محتوای بصری' : String(value);
+}
+
 function addVisual(
   source: ReferenceSlideInput,
   elements: SlideElement[],
@@ -1189,6 +1237,7 @@ function addVisual(
     case 'comparison-grid': renderGrid(visual, elements, frame, true); break;
     case 'table': renderGrid(visual, elements, frame, false); break;
     case 'shape-composition': renderShapeComposition(visual, elements, frame); break;
+    default: renderGenericVisual(visual, elements, frame); break;
   }
 }
 
