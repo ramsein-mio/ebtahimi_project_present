@@ -33,7 +33,7 @@ function safeNumber(value: unknown, fallback: number, min = 0): number {
   return Number.isFinite(n) && n >= min ? n : fallback;
 }
 
-function slideIdsFor(value: unknown, slides: RecordValue[]): string[] {
+function slideIdsFor(value: unknown): string[] {
   if (Array.isArray(value)) return value.map((id) => textValue(id)).filter(Boolean);
   return [];
 }
@@ -70,7 +70,7 @@ function normalizeShapeComposition(data: RecordValue): RecordValue {
     })) : undefined;
     const fixedType = type === 'polygon' && (!points || points.length < 3) ? 'diamond' : type;
     return {
-      ...item, id, type: fixedType, x, y, w, h, style, content,
+      ...item, id, type: fixedType, x, y, w, h, style, content: normalizedContent,
       ...(points ? { points } : {}),
       ...(typeof item.zIndex === 'number' && Number.isFinite(item.zIndex) ? {} : { zIndex: index }),
       ...(typeof item.rotation === 'number' && Number.isFinite(item.rotation) ? {} : { rotation: 0 }),
@@ -115,7 +115,7 @@ function normalizeSlide(value: unknown, index: number): RecordValue {
   return {
     ...source,
     id: textValue(source.id, `slide-${String(index + 1).padStart(2, '0')}`) || `slide-${String(index + 1).padStart(2, '0')}`,
-    order: safeNumber(source.order, index + 1, 1),
+    order: Number.isInteger(source.order) && Number(source.order) >= 1 ? Number(source.order) : index + 1,
     section: textValue(source.section, 'محتوا') || 'محتوا',
     layout,
     title: textValue(source.title ?? source.heading, `اسلاید ${index + 1}`) || `اسلاید ${index + 1}`,
@@ -135,7 +135,7 @@ function normalizeSlide(value: unknown, index: number): RecordValue {
   };
 }
 
-function normalizeChecklist(value: unknown, slides: RecordValue[]): RecordValue[] {
+function normalizeChecklist(value: unknown): RecordValue[] {
   if (!Array.isArray(value)) return [];
   return value.map((entry) => {
     if (typeof entry === 'string' || typeof entry === 'number') return { item: String(entry), slideIds: [] };
@@ -143,7 +143,7 @@ function normalizeChecklist(value: unknown, slides: RecordValue[]): RecordValue[
     return {
       ...entry,
       item: textValue(entry.item ?? entry.title ?? entry.label ?? entry.section, 'موضوع'),
-      slideIds: slideIdsFor(entry.slideIds ?? entry.slides, slides),
+      slideIds: slideIdsFor(entry.slideIds ?? entry.slides),
     };
   });
 }
@@ -190,7 +190,7 @@ export function normalizeFlexiblePresentation(value: unknown): unknown {
     targetAudience: textValue(rawMeta.targetAudience, 'مخاطبان عمومی'),
     estimatedTotalDurationSeconds: safeNumber(rawMeta.estimatedTotalDurationSeconds, Math.max(1, total), 1),
     learningObjectives: Array.isArray(rawMeta.learningObjectives) ? rawMeta.learningObjectives.map((item) => textValue(item)) : [],
-    coverageChecklist: normalizeChecklist(rawMeta.coverageChecklist, rawSlides),
+    coverageChecklist: normalizeChecklist(rawMeta.coverageChecklist),
     teachingRoadmap: normalizeRoadmap(rawMeta.teachingRoadmap),
   };
   const slideIds = new Set(rawSlides.map((slide) => textValue(slide.id)));
