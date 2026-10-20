@@ -115,7 +115,8 @@ function normalizeShapeComposition(data: RecordValue): RecordValue {
 }
 
 function normalizeTheme(value: unknown): unknown {
-  if (!isRecord(value)) return value;
+  if (typeof value === 'string') return { themeName: value };
+  if (!isRecord(value)) return value == null ? value : {};
   const theme: RecordValue = { ...value };
   for (const key of ['background','foreground','text','muted','surface','soft','border','soft2','highlight','primary','secondary','accent']) {
     if (key in theme && typeof theme[key] !== 'string') {
@@ -138,7 +139,7 @@ function normalizeTheme(value: unknown): unknown {
 }
 
 function normalizeCanvas(value: unknown): unknown {
-  if (!isRecord(value)) return value;
+  if (!isRecord(value)) return value == null ? value : {};
   const canvas: RecordValue = { ...value };
   for (const key of ['width', 'height']) {
     if (key in canvas) {
@@ -194,6 +195,8 @@ function normalizeSlide(value: unknown, index: number): RecordValue {
     layout,
     title: textValue(source.title ?? source.heading, `اسلاید ${index + 1}`) || `اسلاید ${index + 1}`,
     subtitle: source.subtitle == null || source.subtitle === '' ? null : textValue(source.subtitle),
+    ...(source.background != null ? { background: typeof source.background === 'string' ? source.background : isRecord(source.background) && typeof source.background.color === 'string' ? source.background : { color: '#ffffff' } } : {}),
+    ...(source.layoutConfig != null ? { layoutConfig: isRecord(source.layoutConfig) ? source.layoutConfig : { value: source.layoutConfig } } : {}),
     body: {
         ...bodySource,
       lead: richLine(bodySource.lead ?? source.content ?? source.text),
@@ -262,6 +265,17 @@ export function normalizeFlexiblePresentation(value: unknown): unknown {
     ...(rawMeta.design != null ? { design: normalizeTheme(rawMeta.design) } : {}),
     ...(rawMeta.canvas != null ? { canvas: normalizeCanvas(rawMeta.canvas) } : {}),
     ...(rawMeta.background != null && typeof rawMeta.background !== 'string' ? { background: isRecord(rawMeta.background) && typeof rawMeta.background.color === 'string' ? rawMeta.background.color : '#ffffff' } : {}),
+    ...(rawMeta.direction != null && !['ltr','rtl','auto'].includes(String(rawMeta.direction)) ? { direction: 'auto' } : {}),
+    ...(rawMeta.fontScale != null && !(typeof rawMeta.fontScale === 'number' && Number.isFinite(rawMeta.fontScale) && rawMeta.fontScale > 0) ? { fontScale: 1 } : {}),
+    ...(rawMeta.spacingScale != null && !(typeof rawMeta.spacingScale === 'number' && Number.isFinite(rawMeta.spacingScale) && rawMeta.spacingScale > 0) ? { spacingScale: 1 } : {}),
+    ...(rawMeta.radiusScale != null && !(typeof rawMeta.radiusScale === 'number' && Number.isFinite(rawMeta.radiusScale) && rawMeta.radiusScale > 0) ? { radiusScale: 1 } : {}),
+    ...(rawMeta.shadowStyle != null && !['none','soft','medium','strong'].includes(String(rawMeta.shadowStyle)) ? { shadowStyle: 'soft' } : {}),
+    ...(rawMeta.contrast != null && !['normal','high'].includes(String(rawMeta.contrast)) ? { contrast: 'normal' } : {}),
+    ...(rawMeta.palette != null && (!Array.isArray(rawMeta.palette) || rawMeta.palette.some((color) => typeof color !== 'string')) ? { palette: Array.isArray(rawMeta.palette) ? rawMeta.palette.map((color) => textValue(color, '#64748b')) : [] } : {}),
+    ...(rawMeta.semanticColors != null && !isRecord(rawMeta.semanticColors) ? { semanticColors: {} } : {}),
+    ...(rawMeta.semanticColors != null && isRecord(rawMeta.semanticColors) ? { semanticColors: Object.fromEntries(Object.entries(rawMeta.semanticColors).map(([key, color]) => [key, typeof color === 'string' ? color : isRecord(color) && typeof color.color === 'string' ? color.color : '#64748b'])) } : {}),
+    ...(rawMeta.layoutDefaults != null && !isRecord(rawMeta.layoutDefaults) ? { layoutDefaults: {} } : {}),
+    ...(rawMeta.assets != null && !Array.isArray(rawMeta.assets) ? { assets: [] } : {}),
     title: textValue(rawMeta.title ?? value.title, 'ارائه') || 'ارائه',
     subtitle: rawMeta.subtitle == null || rawMeta.subtitle === '' ? null : textValue(rawMeta.subtitle),
     language: textValue(rawMeta.language, 'fa'),
