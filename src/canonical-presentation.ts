@@ -434,7 +434,10 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
       });
       if (!isRecord(visual.data)) errors.push({ path: p + '.visual.data', message: 'Visual data must be an object.', expected: 'object', actual: actualType(visual.data), severity: 'error' });
       else if (typeof visual.type === 'string' && supportedVisuals.includes(visual.type)) validateVisualDataContract(visual.type, visual.data, p + '.visual.data', errors);
-      if (['graphic-fullscreen','full-bleed','shape-composition'].includes(String(slide.layout)) && visual.type !== 'shape-composition') errors.push({ path: p + '.layout', message: 'Fullscreen graphic layouts require a shape-composition visual; they cannot silently fall back to a split content layout.', expected: 'visual.type = shape-composition', actual: String(visual.type), severity: 'error' });
+      const shapeCanvas = isRecord(visual.data) && isRecord(visual.data.canvas) ? visual.data.canvas : {};
+      const requiresComposition = ['graphic-fullscreen','full-bleed','shape-composition'].includes(String(slide.layout)) || isRecord(slide.layoutConfig) && slide.layoutConfig.fullscreen === true || shapeCanvas.fullscreen === true;
+      if (requiresComposition && visual.type !== 'shape-composition') errors.push({ path: p + '.layout', message: 'Fullscreen rendering requires a shape-composition visual; this renderer cannot fill the canvas from another visual type.', expected: 'visual.type = shape-composition', actual: String(visual.type), severity: 'error' });
+      if (slide.layout === 'title' && typeof visual.type === 'string' && visual.type !== 'none' && supportedVisuals.includes(visual.type)) errors.push({ path: p + '.visual.type', message: 'The title layout does not render side visuals; use layout content or a fullscreen shape composition.', expected: 'none for title layout', actual: visual.type, severity: 'error' });
       expectNullableString(visual.caption, p + '.visual.caption', errors);
       if (visual.type === 'shape-composition' && isRecord(visual.data)) {
         exactKeys(visual.data, ['version', 'canvas', 'elements'], p + '.visual.data', errors, ['canvas']);
@@ -536,7 +539,9 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
               });
             }
             if (typeof element.x === 'number' && typeof element.w === 'number' && element.x + Math.max(0, element.w) > 1.000001) warnings.push({ path: ep, message: 'Element extends beyond the right canvas edge; renderer may clip it.', severity: 'warning' });
-            if (typeof element.y === 'number' && typeof element.h === 'number' && element.y + element.h > 1.000001) warnings.push({ path: ep, message: 'Element extends beyond the bottom canvas edge; renderer may clip it.', severity: 'warning' });
+            if (isLinearShape && typeof element.x === 'number' && typeof element.w === 'number' && element.x + Math.min(0, element.w) < -0.000001) warnings.push({ path: ep, message: 'Line-like element extends beyond the left canvas edge; renderer may clip it.', severity: 'warning' });
+            if (typeof element.y === 'number' && typeof element.h === 'number' && element.y + Math.max(0, element.h) > 1.000001) warnings.push({ path: ep, message: 'Element extends beyond the bottom canvas edge; renderer may clip it.', severity: 'warning' });
+            if (isLinearShape && typeof element.y === 'number' && typeof element.h === 'number' && element.y + Math.min(0, element.h) < -0.000001) warnings.push({ path: ep, message: 'Line-like element extends beyond the top canvas edge; renderer may clip it.', severity: 'warning' });
             if (isRecord(element.style)) {
               const st = element.style;
               if ('opacity' in st && st.opacity != null && !numberInRange(st.opacity, 0, 1)) errors.push({ path: ep + '.style.opacity', message: 'Opacity must be a finite number between 0 and 1.', expected: 'number in [0,1]', actual: actualType(st.opacity), severity: 'error' });
