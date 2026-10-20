@@ -196,7 +196,6 @@ function scaledCanvasInsets(frame: { x: number; y: number; w: number; h: number 
   const ratio = ratioMatch && Number(ratioMatch[2]) > 0 && Number(ratioMatch[1]) > 0 ? Number(ratioMatch[1]) / Number(ratioMatch[2]) : null;
   const hasWidth = typeof canvas.width === 'number' && Number.isFinite(canvas.width) && canvas.width > 0;
   const hasHeight = typeof canvas.height === 'number' && Number.isFinite(canvas.height) && canvas.height > 0;
-  if (!ratioMatch && !(hasWidth && hasHeight)) return canvas.safeArea;
   const baseWidth = hasWidth ? Number(canvas.width) : hasHeight && ratio ? Number(canvas.height) * ratio : 1280;
   const baseHeight = hasHeight ? Number(canvas.height) : ratio ? baseWidth / ratio : 720;
   const scaleX = frame.w / baseWidth;
