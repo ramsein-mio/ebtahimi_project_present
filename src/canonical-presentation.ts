@@ -169,7 +169,10 @@ function validateVisualData(type: string, value: unknown, path: string, errors: 
   if (!isRecord(value)) return;
   const spec = VISUAL_RENDERER_REGISTRY[type as keyof typeof VISUAL_RENDERER_REGISTRY];
   if (!spec) return;
-  exactKeys(value, [...spec.dataKeys], path, errors, spec.dataKeys.filter((key) => !spec.requiredDataKeys.includes(key)));
+  const dataKeys = [...spec.dataKeys] as string[];
+  const requiredKeys = [...spec.requiredDataKeys] as string[];
+  const optionalKeys = dataKeys.filter((key) => !requiredKeys.some((required) => required === key));
+  exactKeys(value, dataKeys, path, errors, optionalKeys);
   if (type === 'none') return;
   if (type === 'icon-list') {
     if (!Array.isArray(value.items) || value.items.length === 0) { issue(errors, path + '.items', 'Icon list must contain at least one item.', 'non-empty array', value.items); return; }
