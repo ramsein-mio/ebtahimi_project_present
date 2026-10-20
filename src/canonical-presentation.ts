@@ -450,9 +450,8 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
               }
               if ('fontWeight' in style && style.fontWeight != null) {
                 const weight = style.fontWeight;
-                const validWeight = weight === 'bold' || weight === 'normal'
-                  || typeof weight === 'number' && Number.isInteger(weight) && weight >= 100 && weight <= 900 && weight % 100 === 0;
-                if (!validWeight) errors.push({ path: ep + '.style.fontWeight', message: 'Unsupported font weight.', expected: 'normal | bold | numeric 100–900 in steps of 100', actual: String(weight), severity: 'error' });
+                const validWeight = weight === 'bold' || weight === 'normal';
+                if (!validWeight) errors.push({ path: ep + '.style.fontWeight', message: 'The current renderer supports named font weights only.', expected: 'normal | bold', actual: String(weight), severity: 'error' });
               }
               if ('verticalAlign' in style && style.verticalAlign != null && !['top', 'middle', 'bottom'].includes(String(style.verticalAlign))) {
                 errors.push({ path: ep + '.style.verticalAlign', message: 'Unsupported vertical alignment.', expected: 'top | middle | bottom', actual: String(style.verticalAlign), severity: 'error' });
