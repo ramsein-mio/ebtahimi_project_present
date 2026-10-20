@@ -118,7 +118,6 @@ function validateRenderCanvas(value: unknown, path: string, errors: ValidationIs
   }
 }
 
-function expectString(
 function expectString(v: unknown, path: string, errors: ValidationIssue[], nonEmpty = false): v is string {
   if (typeof v !== 'string' || (nonEmpty && !v.trim())) {
     errors.push({ path, message: nonEmpty ? 'Expected a non-empty string.' : 'Expected a string.', expected: nonEmpty ? 'non-empty string' : 'string', actual: actualType(v), severity: 'error' }); return false;
@@ -470,6 +469,8 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
               exactKeys(style, [...COMPOSITION_STYLE_KEYS], ep + '.style', errors, [...COMPOSITION_STYLE_KEYS]);
               for (const key of ['fill', 'stroke', 'color']) if (key in style && style[key] != null) validateColorValue(style[key], ep + '.style.' + key, errors);
               if ('fontSizeUnit' in style && style.fontSizeUnit != null && !['px','canvas-ratio'].includes(String(style.fontSizeUnit))) errors.push({ path: ep + '.style.fontSizeUnit', message: 'fontSizeUnit must be explicit and supported.', expected: 'px | canvas-ratio', actual: String(style.fontSizeUnit), severity: 'error' });
+              if (style.fontSizeUnit === 'canvas-ratio' && typeof style.fontSize === 'number' && style.fontSize > 1) errors.push({ path: ep + '.style.fontSize', message: 'canvas-ratio fontSize must be in (0, 1].', expected: 'number in (0,1]', actual: String(style.fontSize), severity: 'error' });
+              if (style.fontSizeUnit === 'px' && typeof style.fontSize === 'number' && style.fontSize < 1) errors.push({ path: ep + '.style.fontSize', message: 'Pixel fontSize must be at least 1.', expected: 'number in [1,512]', actual: String(style.fontSize), severity: 'error' });
               for (const key of ['strokeWidth','fontSize','fontScale']) {
                 const max = key === 'strokeWidth' ? 24 : key === 'fontSize' ? 512 : 4;
                 const min = key === 'strokeWidth' ? 0 : Number.EPSILON;
