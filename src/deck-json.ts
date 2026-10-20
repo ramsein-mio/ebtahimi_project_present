@@ -158,6 +158,13 @@ function configuredThemeColor(value: unknown, fallback: string, theme: Record<st
 }
 
 function dimensionsForDeck(value: ReferenceDeckInput): { width: number; height: number } {
+  const fitBounds = (width: number, height: number): { width: number; height: number } => {
+    const scale = Math.min(1, 8192 / width, 8192 / height);
+    return {
+      width: Math.max(1, Math.round(width * scale)),
+      height: Math.max(1, Math.round(height * scale)),
+    };
+  };
   const metadata = isRecord(value.presentation) ? value.presentation : {};
   const rootCanvas = isRecord(value.canvas) ? value.canvas : {};
   const metadataCanvas = isRecord(metadata.canvas) ? metadata.canvas : {};
@@ -173,12 +180,9 @@ function dimensionsForDeck(value: ReferenceDeckInput): { width: number; height: 
   if (ratio && Number.isFinite(ratio) && ratio > 0) {
     const width = widthValue ?? (heightValue ? heightValue * ratio : BASE_WIDTH);
     const height = widthValue ? width / ratio : (heightValue ?? width / ratio);
-    return { width: Math.max(1, Math.min(8192, Math.round(width))), height: Math.max(1, Math.min(8192, Math.round(height))) };
+    return fitBounds(width, height);
   }
-  return {
-    width: Math.max(1, Math.min(8192, Math.round(widthValue ?? BASE_WIDTH))),
-    height: Math.max(1, Math.min(8192, Math.round(heightValue ?? BASE_HEIGHT))),
-  };
+  return fitBounds(widthValue ?? BASE_WIDTH, heightValue ?? BASE_HEIGHT);
 }
 
 function registeredTheme(id: string): Record<string, unknown> {
