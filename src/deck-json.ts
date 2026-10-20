@@ -966,8 +966,8 @@ function renderBarChart(
       elements.push(textBox(area.x, rowY, 92, rowHeight * .42, formatChartValue(value, percent ? 'percent' : undefined, percent ? '%' : data.unit), 14, COLORS.foreground, 'left', true));
       const trackY = rowY + rowHeight * .53;
       elements.push(rectangle(area.x, trackY, area.w, 10, COLORS.soft, 5));
-      const fillW = Math.max(3, area.w * Math.max(0, value) / max);
-      elements.push(rectangle(area.x + area.w - fillW, trackY, fillW, 10, color, 5, null, 'bar-' + (index + 1)));
+      const fillW = area.w * Math.max(0, value) / max;
+      if (fillW > 0) elements.push(rectangle(area.x + area.w - fillW, trackY, fillW, 10, color, 5, null, 'bar-' + (index + 1)));
     });
     return;
   }
