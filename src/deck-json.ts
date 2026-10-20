@@ -1180,6 +1180,20 @@ function resolveDesignToken(value: unknown, fallback: string): string {
   return ACTIVE_THEME_TOKENS[key] ?? fallback;
 }
 
+function compositionFrame(
+  frame: { x: number; y: number; w: number; h: number },
+  canvas: Record<string, unknown>,
+): { x: number; y: number; w: number; h: number } {
+  const match = typeof canvas.aspectRatio === 'string' ? canvas.aspectRatio.match(/^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/) : null;
+  if (!match) return frame;
+  const widthRatio = Number(match[1]), heightRatio = Number(match[2]);
+  const ratio = widthRatio / heightRatio;
+  if (!Number.isFinite(ratio) || ratio <= 0) return frame;
+  const width = Math.min(frame.w, frame.h * ratio);
+  const height = Math.min(frame.h, frame.w / ratio);
+  return { x: frame.x + (frame.w - width) / 2, y: frame.y + (frame.h - height) / 2, w: Math.max(1,width), h: Math.max(1,height) };
+}
+
 function renderShapeComposition(
   visual: Record<string, unknown>,
   elements: SlideElement[],
@@ -1187,6 +1201,8 @@ function renderShapeComposition(
 ): void {
   const data = isRecord(visual.data) ? visual.data : {};
   if (!Array.isArray(data.elements)) return;
+  const canvas = isRecord(data.canvas) ? data.canvas : {};
+  frame = compositionFrame(frame, canvas);
   const source = data.elements
     .map((element, index) => ({ element, index }))
     .filter((item) => isRecord(item.element))
@@ -1360,19 +1376,19 @@ function contentSlide(source: ReferenceSlideInput, deck: ReferenceDeckInput): Sl
   if (slideHasValidVisual(source)) {
     const layout = String(source.layout ?? 'content');
     const side = layoutConfig.visualSide === 'right' || ['visual-right','image-led-right'].includes(layout) ? 'right' : 'left';
-    const padding = typeof layoutConfig.padding === 'number' && Number.isFinite(layoutConfig.padding) ? Math.max(0, layoutConfig.padding) : 64;
-    const gap = typeof layoutConfig.gap === 'number' && Number.isFinite(layoutConfig.gap) ? Math.max(0, layoutConfig.gap) : 38;
+    const padding = typeof layoutConfig.padding === 'number' && Number.isFinite(layoutConfig.padding) ? Math.max(0, Math.min(ACTIVE_WIDTH * .25, layoutConfig.padding)) : 64;
+    const gap = typeof layoutConfig.gap === 'number' && Number.isFinite(layoutConfig.gap) ? Math.max(0, Math.min(ACTIVE_WIDTH * .2, layoutConfig.gap)) : 38;
     const ratio = typeof layoutConfig.visualWidthRatio === 'number' && layoutConfig.visualWidthRatio >= .1 && layoutConfig.visualWidthRatio <= .9 ? layoutConfig.visualWidthRatio : layout === 'asymmetric-editorial' ? .56 : .48;
-    const available = ACTIVE_WIDTH - padding * 2 - gap;
-    const visualW = available * ratio;
-    const bodyW = available - visualW;
+    const available = Math.max(120, ACTIVE_WIDTH - padding * 2 - gap);
+    const visualW = Math.max(40, available * ratio);
+    const bodyW = Math.max(40, available - visualW);
     const visualX = side === 'left' ? padding : padding + bodyW + gap;
     const bodyX = side === 'left' ? padding + visualW + gap : padding;
     addBodyText(source, elements, { x: bodyX, y: contentY, w: bodyW, h: contentHeight });
     addVisual(source, elements, { x: visualX, y: contentY, w: visualW, h: contentHeight });
   } else {
-    const padding = typeof layoutConfig.padding === 'number' && Number.isFinite(layoutConfig.padding) ? Math.max(0, layoutConfig.padding) : 64;
-    addBodyText(source, elements, { x: padding, y: contentY, w: ACTIVE_WIDTH - padding * 2, h: contentHeight });
+    const padding = typeof layoutConfig.padding === 'number' && Number.isFinite(layoutConfig.padding) ? Math.max(0, Math.min(ACTIVE_WIDTH * .25, layoutConfig.padding)) : 64;
+    addBodyText(source, elements, { x: padding, y: contentY, w: Math.max(80, ACTIVE_WIDTH - padding * 2), h: contentHeight });
   }
   return {
     background: slideBackground(source, deck),
