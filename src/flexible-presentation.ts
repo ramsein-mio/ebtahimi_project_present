@@ -179,6 +179,11 @@ function normalizeSlide(value: unknown, index: number): RecordValue {
   const bullets = Array.isArray(rawBullets)
     ? rawBullets.map(richLine)
     : rawBullets == null || rawBullets === '' ? [] : [richLine(rawBullets)];
+  const extraBodyBullets = Object.entries(bodySource)
+    .filter(([key, item]) => !['lead', 'bullets', 'emphasis'].includes(key) && item != null)
+    .map(([key, item]) => ({ text: key, details: textValue(item) }))
+    .filter((item) => item.details.trim().length > 0);
+  bullets.push(...extraBodyBullets);
   const rawEmphasis = bodySource.emphasis;
   const emphasis = Array.isArray(rawEmphasis)
     ? rawEmphasis.map((item) => {
@@ -190,6 +195,13 @@ function normalizeSlide(value: unknown, index: number): RecordValue {
   const cognitiveLoad = ['low', 'medium', 'high'].includes(cognitive) ? cognitive : 'medium';
   const durationSeconds = safeNumber(source.durationSeconds, 45, 0.001);
   const layout = textValue(source.layout, index === 0 ? 'title' : 'content') || 'content';
+  const knownSlideKeys = new Set([
+    'id','order','section','layout','layoutConfig','background','theme','canvas','title','heading','subtitle',
+    'body','visual','speakerNotes','notes','durationSeconds','psychologicalPurpose','purpose','cognitiveLoad',
+    'sourceReference','source','data','content','text','description','summary',
+  ]);
+  const looseFields = Object.fromEntries(Object.entries(source).filter(([key, item]) => !knownSlideKeys.has(key) && item != null));
+  const fallbackContent = source.data ?? (Object.keys(looseFields).length ? looseFields : '');
   return {
     ...source,
     id: textValue(source.id, `slide-${String(index + 1).padStart(2, '0')}`) || `slide-${String(index + 1).padStart(2, '0')}`,
@@ -202,7 +214,7 @@ function normalizeSlide(value: unknown, index: number): RecordValue {
     ...(source.layoutConfig != null ? { layoutConfig: isRecord(source.layoutConfig) ? source.layoutConfig : { value: source.layoutConfig } } : {}),
     body: {
         ...bodySource,
-      lead: richLine(bodySource.lead ?? source.content ?? source.text ?? source.description ?? source.summary ?? (source.data != null ? textValue(source.data) : '')),
+      lead: richLine(bodySource.lead ?? source.content ?? source.text ?? source.description ?? source.summary ?? (fallbackContent !== '' ? textValue(fallbackContent) : '')),
       bullets,
       emphasis,
     },
