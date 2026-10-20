@@ -28,7 +28,7 @@ export function JsonInput({ onBack, onGenerated }: JsonInputProps) {
     let result: ValidationResult;
     try {
       const normalizedJson = format === 'yaml'
-        ? JSON.stringify(parsePresentationYaml(source))
+        ? (JSON.stringify(parsePresentationYaml(source)) ?? '')
         : source;
       result = validatePresentationJson(normalizedJson);
     } catch (error) {
