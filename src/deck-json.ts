@@ -200,6 +200,15 @@ function inferredDirection(language: unknown): 'rtl' | 'ltr' {
   return /^(fa|ar|he|ur|ps|sd|ug|yi)(-|$)/.test(tag) ? 'rtl' : 'ltr';
 }
 
+function firstStrongTextDirection(value: unknown): 'rtl' | 'ltr' | null {
+  const text = stringValue(value);
+  for (const character of text) {
+    if (/[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufeff]/u.test(character)) return 'rtl';
+    if (/[A-Za-z\u00c0-\u02af\u0370-\u052f]/u.test(character)) return 'ltr';
+  }
+  return null;
+}
+
 function rgbForColor(value: string): [number, number, number] | null {
   const match = value.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
   if (!match) return null;
@@ -252,7 +261,8 @@ function resolveSlideTheme(deck: ReferenceDeckInput, source: ReferenceSlideInput
   if (Object.keys(semanticColors).length) theme.semanticColors = semanticColors;
   const requestedDirection = slideTheme.direction ?? design.direction ?? metadataTheme.direction ?? metadata.direction ?? legacyRootTheme.direction;
   const language = metadata.locale ?? metadata.language;
-  const direction = requestedDirection === 'ltr' ? 'ltr' : requestedDirection === 'rtl' ? 'rtl' : inferredDirection(language);
+  const direction = requestedDirection === 'ltr' || requestedDirection === 'rtl' || requestedDirection === 'auto'
+    ? requestedDirection : inferredDirection(language);
   ACTIVE_PRESENTATION_META = {
     ...metadata,
     direction,
@@ -436,7 +446,11 @@ function paragraph(
     lineHeight: typeof ACTIVE_PRESENTATION_META.spacingScale === 'number' && Number.isFinite(ACTIVE_PRESENTATION_META.spacingScale) ? Math.max(1, Math.min(3, 2 * ACTIVE_PRESENTATION_META.spacingScale)) : 2.0,
     spaceBefore: 0,
     spaceAfter: 0,
-    rtl: ACTIVE_PRESENTATION_META.direction === 'ltr' ? false : true,
+    rtl: ACTIVE_PRESENTATION_META.direction === 'rtl'
+      ? true
+      : ACTIVE_PRESENTATION_META.direction === 'ltr'
+        ? false
+        : (firstStrongTextDirection(value) ?? inferredDirection(ACTIVE_PRESENTATION_META.locale ?? ACTIVE_PRESENTATION_META.language)) === 'rtl',
     runs,
   };
 }
