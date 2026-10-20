@@ -264,7 +264,7 @@ function validateVisualDataContract(type: string, data: Record<string, unknown>,
         if (!isRecord(rawSeries)) { errors.push({ path: seriesPath, message: 'Chart series must be an object.', expected: 'object', actual: actualType(rawSeries), severity: 'error' }); return; }
         exactKeys(rawSeries, ['name','color','points'], seriesPath, errors, ['name','color']);
         optionalText(rawSeries, 'name', seriesPath); validateOptionalColor(rawSeries, seriesPath);
-        if (!Array.isArray(rawSeries.points) || rawSeries.points.length < 1 || rawSeries.points.length > 250) { errors.push({ path: seriesPath + '.points', message: 'Line series must contain between 1 and 1000 points.', expected: 'array of 1..1000 points', actual: actualType(rawSeries.points), severity: 'error' }); return; }
+        if (!Array.isArray(rawSeries.points) || rawSeries.points.length < 1 || rawSeries.points.length > 250) { errors.push({ path: seriesPath + '.points', message: 'Line series must contain between 1 and 250 points.', expected: 'array of 1..250 points', actual: actualType(rawSeries.points), severity: 'error' }); return; }
         const labels: string[] = [];
         rawSeries.points.forEach((rawPoint, pointIndex) => {
           const pointPath = seriesPath + '.points[' + pointIndex + ']';
