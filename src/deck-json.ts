@@ -172,6 +172,52 @@ function dimensionsForDeck(value: ReferenceDeckInput): { width: number; height: 
   return { width, height: BASE_HEIGHT };
 }
 
+function insetFrame(frame: { x: number; y: number; w: number; h: number }, rawInsets: unknown): { x: number; y: number; w: number; h: number } {
+  if (!isRecord(rawInsets)) return frame;
+  const top = typeof rawInsets.top === 'number' && Number.isFinite(rawInsets.top) ? Math.max(0, rawInsets.top) : 0;
+  const right = typeof rawInsets.right === 'number' && Number.isFinite(rawInsets.right) ? Math.max(0, rawInsets.right) : 0;
+  const bottom = typeof rawInsets.bottom === 'number' && Number.isFinite(rawInsets.bottom) ? Math.max(0, rawInsets.bottom) : 0;
+  const left = typeof rawInsets.left === 'number' && Number.isFinite(rawInsets.left) ? Math.max(0, rawInsets.left) : 0;
+  const safeLeft = Math.min(left, frame.w * 0.25);
+  const safeRight = Math.min(right, frame.w * 0.25);
+  const safeTop = Math.min(top, frame.h * 0.25);
+  const safeBottom = Math.min(bottom, frame.h * 0.25);
+  return {
+    x: frame.x + safeLeft,
+    y: frame.y + safeTop,
+    w: Math.max(1, frame.w - safeLeft - safeRight),
+    h: Math.max(1, frame.h - safeTop - safeBottom),
+  };
+}
+
+function inferSlideDirection(source: ReferenceSlideInput, metadata: Record<string, unknown>): 'ltr' | 'rtl' {
+  const sourceText = [
+    source.title, source.subtitle,
+    isRecord(source.body) ? source.body.lead : '',
+    isRecord(source.body) ? source.body.emphasis : '',
+    isRecord(source.body) && Array.isArray(source.body.bullets) ? source.body.bullets : [],
+  ];
+  const flatten = (value: unknown): string => {
+    if (typeof value === 'string') return value;
+    if (Array.isArray(value)) return value.map(flatten).join(' ');
+    if (isRecord(value)) return [value.text, value.details, value.description].map(flatten).join(' ');
+    return '';
+  };
+  const text = sourceText.map(flatten).join(' ');
+  const rtlLetters = (text.match(/[\u0590-\u08FF]/g) ?? []).length;
+  const latinLetters = (text.match(/[A-Za-z]/g) ?? []).length;
+  if (rtlLetters > latinLetters) return 'rtl';
+  if (latinLetters > rtlLetters) return 'ltr';
+  const locale = String(metadata.locale ?? metadata.language ?? '').toLowerCase();
+  if (/^(ar|fa|he|ur|ps|sd|dv|ku)(-|$)/.test(locale)) return 'rtl';
+  return 'ltr';
+}
+
+function spacingScale(): number {
+  const value = ACTIVE_PRESENTATION_META.spacingScale;
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0.5, Math.min(2, value)) : 1;
+}
+
 function resolveSlideTheme(deck: ReferenceDeckInput, source: ReferenceSlideInput): void {
   const metadata = isRecord(deck.presentation) ? deck.presentation : {};
   const rootTheme = isRecord(deck.theme) ? deck.theme : {};
@@ -204,9 +250,13 @@ function resolveSlideTheme(deck: ReferenceDeckInput, source: ReferenceSlideInput
     ...(isRecord(slideTheme.semanticColors) ? slideTheme.semanticColors : {}),
   };
   if (Object.keys(semanticColors).length) theme.semanticColors = semanticColors;
+  const requestedDirection = slideTheme.direction ?? metadataTheme.direction ?? metadata.direction ?? rootTheme.direction;
+  const resolvedDirection = requestedDirection === 'ltr' || requestedDirection === 'rtl'
+    ? requestedDirection
+    : requestedDirection === 'auto' ? inferSlideDirection(source, metadata) : 'rtl';
   ACTIVE_PRESENTATION_META = {
     ...metadata,
-    direction: slideTheme.direction ?? metadataTheme.direction ?? metadata.direction ?? rootTheme.direction,
+    direction: resolvedDirection,
     locale: slideTheme.locale ?? metadataTheme.locale ?? metadata.locale ?? rootTheme.locale,
     fontScale: slideTheme.fontScale ?? metadataTheme.fontScale ?? metadata.fontScale ?? rootTheme.fontScale,
     spacingScale: slideTheme.spacingScale ?? metadataTheme.spacingScale ?? metadata.spacingScale ?? rootTheme.spacingScale,
@@ -383,7 +433,7 @@ function run(segment: ParsedSegment, size: number, color: string): TextRun {
     i: false,
     u: false,
     strike: false,
-    size,
+    size: Math.max(1, size * (typeof ACTIVE_PRESENTATION_META.fontScale === 'number' && Number.isFinite(ACTIVE_PRESENTATION_META.fontScale) ? Math.max(0.1, Math.min(4, ACTIVE_PRESENTATION_META.fontScale)) : 1)),
     color,
     fonts: FONT,
     ...(segment.highlight ? { highlight: COLORS.highlight } : {}),
@@ -1187,6 +1237,8 @@ function renderShapeComposition(
 ): void {
   const data = isRecord(visual.data) ? visual.data : {};
   if (!Array.isArray(data.elements)) return;
+  const compositionCanvas = isRecord(data.canvas) ? data.canvas : {};
+  frame = insetFrame(frame, compositionCanvas.safeArea);
   const source = data.elements
     .map((element, index) => ({ element, index }))
     .filter((item) => isRecord(item.element))
@@ -1217,7 +1269,7 @@ function renderShapeComposition(
     const strokeColor = applyElementOpacity(resolveDesignToken(style.stroke, COLORS.foreground), opacity);
     const dashValue = Array.isArray(style.lineDash) ? style.lineDash : Array.isArray(style.dash) ? style.dash : null;
     const defaultsToStroke = type !== 'text' && (['line', 'connector', 'arrow', 'bracket', 'arc', 'ring'].includes(type) || style.fill === 'none');
-    const hasStroke = typeof style.stroke === 'string' ? style.stroke !== 'none' : defaultsToStroke;
+    const hasStroke = style.strokeWidth === 0 ? false : typeof style.stroke === 'string' ? style.stroke !== 'none' : defaultsToStroke;
     const requestedStrokeWidth = typeof style.strokeWidth === 'number' && Number.isFinite(style.strokeWidth) && style.strokeWidth > 0
       ? Math.min(24, style.strokeWidth)
       : null;
@@ -1277,10 +1329,16 @@ function renderShapeComposition(
     }
     const rawText = typeof content.text === 'string' ? content.text : typeof content.value === 'string' ? content.value : typeof item.text === 'string' ? item.text : '';
     const isText = type === 'text' || rawText.length > 0;
-    const metadata = ACTIVE_PRESENTATION_META;
-    const scale = typeof style.fontScale === 'number' && Number.isFinite(style.fontScale) ? style.fontScale : typeof metadata.fontScale === 'number' && Number.isFinite(metadata.fontScale) ? metadata.fontScale : 1;
+    const localScale = typeof style.fontScale === 'number' && Number.isFinite(style.fontScale) ? Math.max(0.1, Math.min(4, style.fontScale)) : 1;
     const rawFontSize = typeof style.fontSize === 'number' && Number.isFinite(style.fontSize) ? style.fontSize : 16;
-    const fontSize = Math.max(6, (rawFontSize > 0 && rawFontSize <= 1 ? rawFontSize * ACTIVE_HEIGHT : rawFontSize) * scale);
+    const fontSizeUnit = style.fontSizeUnit;
+    const baseFontSize = fontSizeUnit === 'canvas-ratio'
+      ? rawFontSize * ACTIVE_HEIGHT
+      : fontSizeUnit === 'px'
+        ? rawFontSize
+        : rawFontSize > 0 && rawFontSize <= 1 ? rawFontSize * ACTIVE_HEIGHT : rawFontSize;
+    // Missing fontSizeUnit keeps the legacy <= 1 canvas-ratio convention for old decks.
+    const fontSize = Math.max(1, baseFontSize * localScale);
     const text = isText ? textBody(rawText, fontSize,
       applyElementOpacity(resolveDesignToken(style.color, COLORS.foreground), opacity),
       style.textAlign === 'left' || style.textAlign === 'center' ? style.textAlign : 'right',
@@ -1318,8 +1376,10 @@ function contentSlide(source: ReferenceSlideInput, deck: ReferenceDeckInput): Sl
   const visual = isRecord(source.visual) ? source.visual : {};
   const data = isRecord(visual.data) ? visual.data : {};
   const canvas = isRecord(data.canvas) ? data.canvas : {};
-  const layoutConfig = isRecord(source.layoutConfig) ? source.layoutConfig : {};
+  const sourceLayoutConfig = isRecord(source.layoutConfig) ? source.layoutConfig : {};
   const metadata = isRecord(deck.presentation) ? deck.presentation : {};
+  const layoutDefaults = isRecord(metadata.layoutDefaults) ? metadata.layoutDefaults : {};
+  const layoutConfig = { ...layoutDefaults, ...sourceLayoutConfig };
   const metadataCanvas = isRecord(metadata.canvas) ? metadata.canvas : {};
   const rootCanvas = isRecord(deck.canvas) ? deck.canvas : {};
   const fullscreen =
@@ -1332,7 +1392,9 @@ function contentSlide(source: ReferenceSlideInput, deck: ReferenceDeckInput): Sl
     rootCanvas.fullscreen === true ||
     rootCanvas.mode === 'fullscreen';
   if (fullscreen && visual.type === 'shape-composition') {
-    renderShapeComposition(visual, elements, { x: 0, y: 0, w: ACTIVE_WIDTH, h: ACTIVE_HEIGHT });
+    const globalSafeArea = isRecord(metadataCanvas.safeArea) ? metadataCanvas.safeArea : rootCanvas.safeArea;
+    const fullscreenFrame = insetFrame({ x: 0, y: 0, w: ACTIVE_WIDTH, h: ACTIVE_HEIGHT }, globalSafeArea);
+    renderShapeComposition(visual, elements, fullscreenFrame);
     return {
       background: slideBackground(source, deck),
       elements,
@@ -1345,11 +1407,16 @@ function contentSlide(source: ReferenceSlideInput, deck: ReferenceDeckInput): Sl
   const contentHeight = ACTIVE_HEIGHT - contentY - 54;
   if (slideHasValidVisual(source)) {
     const layout = String(source.layout ?? 'content');
-    const side = layoutConfig.visualSide === 'right' || ['visual-right','image-led-right'].includes(layout) ? 'right' : 'left';
-    const padding = typeof layoutConfig.padding === 'number' && Number.isFinite(layoutConfig.padding) ? Math.max(0, layoutConfig.padding) : 64;
-    const gap = typeof layoutConfig.gap === 'number' && Number.isFinite(layoutConfig.gap) ? Math.max(0, layoutConfig.gap) : 38;
-    const ratio = typeof layoutConfig.visualWidthRatio === 'number' && layoutConfig.visualWidthRatio > .1 && layoutConfig.visualWidthRatio < .9 ? layoutConfig.visualWidthRatio : layout === 'asymmetric-editorial' ? .56 : .48;
-    const available = ACTIVE_WIDTH - padding * 2 - gap;
+    const configuredSide = layoutConfig.visualSide === 'right' || layoutConfig.visualSide === 'left' ? layoutConfig.visualSide : null;
+    const side = configuredSide ?? (['visual-right','image-led-right'].includes(layout) ? 'right' : ACTIVE_PRESENTATION_META.direction === 'ltr' ? 'right' : 'left');
+    const scale = spacingScale();
+    const maxInset = Math.min(ACTIVE_WIDTH, ACTIVE_HEIGHT) * 0.22;
+    const requestedPadding = typeof layoutConfig.padding === 'number' && Number.isFinite(layoutConfig.padding) ? layoutConfig.padding : 64;
+    const requestedGap = typeof layoutConfig.gap === 'number' && Number.isFinite(layoutConfig.gap) ? layoutConfig.gap : 38;
+    const padding = Math.min(maxInset, Math.max(0, requestedPadding * scale));
+    const gap = Math.min(maxInset, Math.max(0, requestedGap * scale));
+    const ratio = typeof layoutConfig.visualWidthRatio === 'number' && layoutConfig.visualWidthRatio >= .1 && layoutConfig.visualWidthRatio <= .9 ? layoutConfig.visualWidthRatio : layout === 'asymmetric-editorial' ? .56 : .48;
+    const available = Math.max(1, ACTIVE_WIDTH - padding * 2 - gap);
     const visualW = available * ratio;
     const bodyW = available - visualW;
     const visualX = side === 'left' ? padding : padding + bodyW + gap;
@@ -1357,8 +1424,11 @@ function contentSlide(source: ReferenceSlideInput, deck: ReferenceDeckInput): Sl
     addBodyText(source, elements, { x: bodyX, y: contentY, w: bodyW, h: contentHeight });
     addVisual(source, elements, { x: visualX, y: contentY, w: visualW, h: contentHeight });
   } else {
-    const padding = typeof layoutConfig.padding === 'number' && Number.isFinite(layoutConfig.padding) ? Math.max(0, layoutConfig.padding) : 64;
-    addBodyText(source, elements, { x: padding, y: contentY, w: ACTIVE_WIDTH - padding * 2, h: contentHeight });
+    const scale = spacingScale();
+    const maxInset = Math.min(ACTIVE_WIDTH, ACTIVE_HEIGHT) * 0.22;
+    const requestedPadding = typeof layoutConfig.padding === 'number' && Number.isFinite(layoutConfig.padding) ? layoutConfig.padding : 64;
+    const padding = Math.min(maxInset, Math.max(0, requestedPadding * scale));
+    addBodyText(source, elements, { x: padding, y: contentY, w: Math.max(1, ACTIVE_WIDTH - padding * 2), h: contentHeight });
   }
   return {
     background: slideBackground(source, deck),
