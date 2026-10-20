@@ -11,6 +11,7 @@ import type {
 } from '@web-ppt/core';
 import { encodePresentationLineName } from './presentation-interactions';
 import { SUPPORTED_COMPOSITION_SHAPE_TYPES } from './shape-composition-contract';
+import { THEME_IDS, themeVars } from './viewer/themes';
 
 const BASE_WIDTH = 1280;
 const BASE_HEIGHT = 720;
@@ -174,15 +175,28 @@ function dimensionsForDeck(value: ReferenceDeckInput): { width: number; height: 
 function resolveSlideTheme(deck: ReferenceDeckInput, source: ReferenceSlideInput): void {
   const metadata = isRecord(deck.presentation) ? deck.presentation : {};
   const rootTheme = isRecord(deck.theme) ? deck.theme : {};
-  const metadataTheme = {
+  const themeName = typeof metadata.theme === 'string' ? metadata.theme.trim().toLowerCase() : '';
+  const registered = THEME_IDS.includes(themeName) ? themeVars(themeName) : null;
+  const preset: Record<string, unknown> = registered ? {
+    background: registered['--bg'],
+    foreground: registered['--fg'],
+    muted: registered['--muted'],
+    surface: registered['--soft'],
+    border: registered['--soft2'],
+    highlight: registered['--hl-bg'],
+    palette: [registered['--p0'], registered['--p1'], registered['--p2'], registered['--p3'], registered['--p4'], registered['--p5']],
+  } : {};
+  const metadataTheme: Record<string, unknown> = {
+    ...preset,
     ...(isRecord(metadata.theme) ? metadata.theme : {}),
+    ...(Array.isArray(metadata.palette) ? { palette: metadata.palette } : {}),
     ...(isRecord(metadata.design) ? metadata.design : {}),
   };
   const slideTheme = isRecord(source.theme) ? source.theme : {};
-  const theme: Record<string, unknown> = { ...rootTheme, ...metadataTheme, ...slideTheme };
-  if (Array.isArray(metadata.palette) && !Array.isArray(metadataTheme.palette) && !Array.isArray(slideTheme.palette)) {
-    theme.palette = metadata.palette;
-  }
+  // Precedence: named base theme < legacy deck theme < presentation metadata
+  // < presentation.design < slide.theme. Explicit per-slide/canvas backgrounds
+  // are resolved separately below.
+  const theme: Record<string, unknown> = { ...preset, ...rootTheme, ...metadataTheme, ...slideTheme };
   const semanticColors = {
     ...(isRecord(metadata.semanticColors) ? metadata.semanticColors : {}),
     ...(isRecord(rootTheme.semanticColors) ? rootTheme.semanticColors : {}),
@@ -193,8 +207,12 @@ function resolveSlideTheme(deck: ReferenceDeckInput, source: ReferenceSlideInput
   ACTIVE_PRESENTATION_META = {
     ...metadata,
     direction: slideTheme.direction ?? metadataTheme.direction ?? metadata.direction ?? rootTheme.direction,
+    locale: slideTheme.locale ?? metadataTheme.locale ?? metadata.locale ?? rootTheme.locale,
     fontScale: slideTheme.fontScale ?? metadataTheme.fontScale ?? metadata.fontScale ?? rootTheme.fontScale,
     spacingScale: slideTheme.spacingScale ?? metadataTheme.spacingScale ?? metadata.spacingScale ?? rootTheme.spacingScale,
+    radiusScale: slideTheme.radiusScale ?? metadataTheme.radiusScale ?? metadata.radiusScale ?? rootTheme.radiusScale,
+    shadowStyle: slideTheme.shadowStyle ?? metadataTheme.shadowStyle ?? metadata.shadowStyle ?? rootTheme.shadowStyle,
+    contrast: slideTheme.contrast ?? metadataTheme.contrast ?? metadata.contrast ?? rootTheme.contrast,
   };
   const rootCanvas = isRecord(deck.canvas) ? deck.canvas : {};
   const metadataCanvas = isRecord(metadata.canvas) ? metadata.canvas : {};
@@ -203,7 +221,7 @@ function resolveSlideTheme(deck: ReferenceDeckInput, source: ReferenceSlideInput
   const canvas = isRecord(data.canvas) ? data.canvas : {};
   const slideBackground = isRecord(source.background) ? source.background.color : source.background;
   const background = configuredThemeColor(
-    slideBackground ?? canvas.background ?? metadata.background ?? metadataCanvas.background ?? rootCanvas.background ?? theme.background,
+    slideBackground ?? canvas.background ?? metadataCanvas.background ?? rootCanvas.background ?? metadata.background ?? theme.background,
     DEFAULT_COLORS.background,
     theme,
   );
@@ -215,10 +233,13 @@ function resolveSlideTheme(deck: ReferenceDeckInput, source: ReferenceSlideInput
     : typeof theme.fontFamily === 'string' && theme.fontFamily.trim()
       ? [theme.fontFamily, 'Tahoma', 'Arial']
       : null;
+  const requestedForeground = configuredThemeColor(theme.foreground ?? theme.text, DEFAULT_COLORS.foreground, theme);
+  const requestedMuted = configuredThemeColor(theme.muted, DEFAULT_COLORS.muted, theme);
+  const highContrast = ACTIVE_PRESENTATION_META.contrast === 'high';
   COLORS = {
     background,
-    foreground: configuredThemeColor(theme.foreground ?? theme.text, DEFAULT_COLORS.foreground, theme),
-    muted: configuredThemeColor(theme.muted, DEFAULT_COLORS.muted, theme),
+    foreground: highContrast ? contrastSafeForeground(background, requestedForeground) : requestedForeground,
+    muted: highContrast ? contrastSafeForeground(background, requestedMuted) : requestedMuted,
     soft: configuredThemeColor(theme.surface ?? theme.soft, DEFAULT_COLORS.soft, theme),
     soft2: configuredThemeColor(theme.border ?? theme.soft2, DEFAULT_COLORS.soft2, theme),
     highlight: configuredThemeColor(theme.highlight, DEFAULT_COLORS.highlight, theme),
@@ -247,20 +268,45 @@ function resolveSlideTheme(deck: ReferenceDeckInput, source: ReferenceSlideInput
   }
 }
 
+function parseHexRgb(color: string): [number, number, number] | null {
+  const match = color.trim().match(/^#([\da-f]{3}|[\da-f]{6})$/i);
+  if (!match) return null;
+  const raw = match[1].length === 3 ? match[1].split('').map((part) => part + part).join('') : match[1];
+  return [parseInt(raw.slice(0, 2), 16), parseInt(raw.slice(2, 4), 16), parseInt(raw.slice(4, 6), 16)];
+}
+
+function luminance(color: string): number | null {
+  const rgb = parseHexRgb(color);
+  if (!rgb) return null;
+  const channels = rgb.map((part) => {
+    const s = part / 255;
+    return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+}
+
+function contrastSafeForeground(background: string, foreground: string): string {
+  const bg = luminance(background);
+  const fg = luminance(foreground);
+  if (bg === null || fg === null) return foreground;
+  const ratio = (Math.max(bg, fg) + 0.05) / (Math.min(bg, fg) + 0.05);
+  if (ratio >= 7) return foreground;
+  const blackRatio = (bg + 0.05) / 0.05;
+  const whiteRatio = 1.05 / (bg + 0.05);
+  return blackRatio >= whiteRatio ? '#000000' : '#ffffff';
+}
 function slideBackground(source: ReferenceSlideInput, deck: ReferenceDeckInput): Fill {
   const metadata = isRecord(deck.presentation) ? deck.presentation : {};
-  const rootTheme = isRecord(deck.theme) ? deck.theme : {};
-  const metadataTheme = isRecord(metadata.design) ? metadata.design : isRecord(metadata.theme) ? metadata.theme : {};
   const rootCanvas = isRecord(deck.canvas) ? deck.canvas : {};
   const metadataCanvas = isRecord(metadata.canvas) ? metadata.canvas : {};
   const visual = isRecord(source.visual) ? source.visual : {};
   const data = isRecord(visual.data) ? visual.data : {};
   const canvas = isRecord(data.canvas) ? data.canvas : {};
   const explicit = isRecord(source.background) ? source.background.color : source.background;
-  const value = explicit ?? canvas.background ?? metadata.background ?? metadataCanvas.background ?? rootCanvas.background ?? metadataTheme.background ?? rootTheme.background ?? COLORS.background;
+  // Keep exactly the same background precedence used when resolving theme tokens.
+  const value = explicit ?? canvas.background ?? metadataCanvas.background ?? rootCanvas.background ?? metadata.background ?? COLORS.background;
   return { type: 'solid', color: resolveDesignToken(value, COLORS.background) };
 }
-
 function isLineObject(value: unknown): value is LineObject {
   return isRecord(value);
 }
@@ -798,33 +844,97 @@ function renderIconList(
   });
 }
 
+function formatChartValue(value: number, format?: unknown, unit?: unknown): string {
+  let formatted = String(Math.round(value * 100) / 100);
+  const locale = typeof ACTIVE_PRESENTATION_META.locale === 'string'
+    ? ACTIVE_PRESENTATION_META.locale
+    : typeof ACTIVE_PRESENTATION_META.language === 'string' ? ACTIVE_PRESENTATION_META.language : 'fa-IR';
+  try {
+    formatted = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(value);
+  } catch {
+    // Invalid or unavailable locale: a stable number still renders.
+  }
+  if (format === 'percent' || unit === '%') return formatted + '%';
+  return typeof unit === 'string' && unit.trim() ? formatted + ' ' + unit.trim() : formatted;
+}
+
+function isPercentAxis(data: Record<string, unknown>): boolean {
+  return data.valueFormat === 'percent'
+    || data.unit === '%'
+    || (typeof data.yAxisLabel === 'string' && /percent|درصد|%/i.test(data.yAxisLabel));
+}
+
 function renderBarChart(
   visual: Record<string, unknown>,
   elements: SlideElement[],
   frame: { x: number; y: number; w: number; h: number },
 ): void {
   const data = isRecord(visual.data) ? visual.data : {};
-  const series = Array.isArray(data.series) ? data.series.filter(isRecord) : [];
-  const values = series.length && Array.isArray(series[0].values) ? series[0].values.filter(isRecord) : [];
-  if (!values.length) return;
+  const sourceSeries = Array.isArray(data.series) ? data.series.filter(isRecord) : [];
+  const series = sourceSeries.map((item) => ({
+    name: stringValue(item.name),
+    color: colorString(item.color, ''),
+    values: Array.isArray(item.values) ? item.values.filter(isRecord) : [],
+  })).filter((item) => item.values.length > 0);
+  if (!series.length) return;
+  const labels = series[0].values.map((item) => stringValue(item.label));
+  const alignedSeries = series.filter((item) => item.values.length === labels.length
+    && item.values.every((point, index) => stringValue(point.label) === labels[index]));
+  if (!alignedSeries.length) return;
+
   const captionSpace = visualCaption(visual.caption, elements, frame);
-  const area = { x: frame.x + 24, y: frame.y + 22, w: frame.w - 48, h: frame.h - 44 - captionSpace };
-  const max = Math.max(1, ...values.map((item) => Number(item.value) || 0));
-  const rowHeight = area.h / values.length;
-  const isPercent = stringValue(data.yAxisLabel).includes('درصد');
-  values.forEach((item, index) => {
-    const rowY = area.y + rowHeight * index;
-    const value = Number(item.value) || 0;
-    const color = colorString(item.color, colorString(series[0]?.color, COLORS.palette[index % COLORS.palette.length]));
-    elements.push(textBox(area.x + 100, rowY, area.w - 100, rowHeight * .42, item.label, 14, COLORS.foreground, 'right', true));
-    elements.push(textBox(area.x, rowY, 92, rowHeight * .42, `${value}${isPercent ? '%' : ''}`, 14, COLORS.foreground, 'left', true));
-    const trackY = rowY + rowHeight * .53;
-    elements.push(rectangle(area.x, trackY, area.w, 10, COLORS.soft, 5));
-    const fillW = Math.max(3, area.w * Math.max(0, value) / max);
-    elements.push(rectangle(area.x + area.w - fillW, trackY, fillW, 10, color, 5, null, `bar-${index + 1}`));
+  const percent = isPercentAxis(data);
+  const allValues = alignedSeries.flatMap((item) => item.values.map((point) => Number(point.value)).filter((value) => Number.isFinite(value) && value >= 0));
+  const max = Math.max(1, ...allValues);
+
+  // Preserve the classic single-series layout. Multi-series data is grouped by
+  // category and gets a legend so each series is visible, not discarded.
+  if (alignedSeries.length === 1) {
+    const values = alignedSeries[0].values;
+    const area = { x: frame.x + 24, y: frame.y + 22, w: frame.w - 48, h: frame.h - 44 - captionSpace };
+    const rowHeight = area.h / values.length;
+    values.forEach((item, index) => {
+      const rowY = area.y + rowHeight * index;
+      const value = Number(item.value);
+      if (!Number.isFinite(value)) return;
+      const color = colorString(item.color, alignedSeries[0].color || COLORS.palette[index % COLORS.palette.length]);
+      elements.push(textBox(area.x + 100, rowY, area.w - 100, rowHeight * .42, item.label, 14, COLORS.foreground, 'right', true));
+      elements.push(textBox(area.x, rowY, 92, rowHeight * .42, formatChartValue(value, percent ? 'percent' : undefined, percent ? '%' : data.unit), 14, COLORS.foreground, 'left', true));
+      const trackY = rowY + rowHeight * .53;
+      elements.push(rectangle(area.x, trackY, area.w, 10, COLORS.soft, 5));
+      const fillW = Math.max(3, area.w * Math.max(0, value) / max);
+      elements.push(rectangle(area.x + area.w - fillW, trackY, fillW, 10, color, 5, null, 'bar-' + (index + 1)));
+    });
+    return;
+  }
+
+  const legendHeight = 26;
+  const area = { x: frame.x + 24, y: frame.y + legendHeight + 14, w: frame.w - 48, h: frame.h - legendHeight - 36 - captionSpace };
+  alignedSeries.forEach((item, index) => {
+    const x = frame.x + frame.w - 18 - index * 150;
+    elements.push(rectangle(x - 12, frame.y + 15, 9, 9, item.color || COLORS.palette[index % COLORS.palette.length], 4));
+    elements.push(textBox(x - 138, frame.y + 7, 120, 24, item.name || ('Series ' + (index + 1)), 10, COLORS.foreground, 'right'));
+  });
+  const rowHeight = area.h / labels.length;
+  const labelHeight = Math.min(22, Math.max(14, rowHeight * .28));
+  const barRegionHeight = Math.max(1, rowHeight - labelHeight);
+  labels.forEach((label, categoryIndex) => {
+    const rowY = area.y + categoryIndex * rowHeight;
+    elements.push(textBox(area.x, rowY, area.w, labelHeight, label, 12, COLORS.foreground, 'right', true));
+    const subRowHeight = barRegionHeight / alignedSeries.length;
+    alignedSeries.forEach((item, seriesIndex) => {
+      const value = Number(item.values[categoryIndex].value);
+      if (!Number.isFinite(value)) return;
+      const y = rowY + labelHeight + seriesIndex * subRowHeight + Math.max(0, (subRowHeight - 8) / 2);
+      const trackX = area.x + 52;
+      const trackW = Math.max(1, area.w - 56);
+      elements.push(textBox(area.x, y - 4, 46, 16, formatChartValue(value, percent ? 'percent' : undefined, percent ? '%' : data.unit), 9, COLORS.foreground, 'left'));
+      elements.push(rectangle(trackX, y, trackW, Math.min(8, subRowHeight), COLORS.soft, 4));
+      const fillW = Math.max(0, trackW * Math.max(0, value) / max);
+      if (fillW > 0) elements.push(rectangle(trackX + trackW - fillW, y, fillW, Math.min(8, subRowHeight), item.color || COLORS.palette[seriesIndex % COLORS.palette.length], 4, null, 'bar-' + (categoryIndex + 1) + '-' + (seriesIndex + 1)));
+    });
   });
 }
-
 function renderLineChart(
   visual: Record<string, unknown>,
   elements: SlideElement[],
@@ -853,7 +963,13 @@ function renderLineChart(
   const maxValue = Math.max(1, ...allValues);
   const valueSpan = Math.max(1, maxValue - minValue);
   const longest = Math.max(...parsed.map((item) => item.points.length));
-  const xFor = (index: number, count: number) => area.x + (count <= 1 ? area.w / 2 : index * area.w / (count - 1));
+  const allX = parsed.flatMap((item) => item.points.map((point) => point.x));
+  const numericX = allX.length > 0 && allX.every((value) => typeof value === 'number' && Number.isFinite(value));
+  const minX = numericX ? Math.min(...allX as number[]) : 0;
+  const maxX = numericX ? Math.max(...allX as number[]) : 0;
+  const xFor = (value: unknown, index: number, count: number) => numericX
+    ? (maxX === minX ? area.x + area.w / 2 : area.x + ((Number(value) - minX) / (maxX - minX)) * area.w)
+    : area.x + (count <= 1 ? area.w / 2 : index * area.w / (count - 1));
   const yFor = (value: number) => area.y + area.h - (value - minValue) / valueSpan * area.h;
 
   for (let index = 0; index <= 4; index += 1) {
@@ -870,13 +986,13 @@ function renderLineChart(
       null,
       `line-grid-${index}`,
     ));
-    elements.push(textBox(frame.x + 10, y - 11, 42, 22, String(Math.round(value * 10) / 10), 10, COLORS.muted, 'left'));
+    elements.push(textBox(frame.x + 10, y - 11, 42, 22, formatChartValue(Math.round(value * 10) / 10, undefined, data.unit), 10, COLORS.muted, 'left'));
   }
 
   parsed.forEach((item, seriesIndex) => {
     const color = item.color || COLORS.palette[seriesIndex % COLORS.palette.length];
     const points = item.points.map((point, pointIndex) => ({
-      x: xFor(pointIndex, item.points.length),
+      x: xFor(point.x, pointIndex, item.points.length),
       y: yFor(Number(point.y) || 0),
       label: stringValue(point.x),
     }));
@@ -911,8 +1027,8 @@ function renderLineChart(
 
   const labels = parsed.find((item) => item.points.length === longest)?.points ?? parsed[0].points;
   labels.forEach((point, index) => {
-    const x = xFor(index, labels.length);
-    elements.push(textBox(x - 38, area.y + area.h + 7, 76, 24, point.x, 10, COLORS.muted, 'center'));
+    const x = xFor(point.x, index, labels.length);
+    elements.push(textBox(x - 38, area.y + area.h + 7, 76, 24, numericX ? formatChartValue(Number(point.x)) : point.x, 10, COLORS.muted, 'center'));
   });
   if (data.xAxisLabel) elements.push(textBox(area.x, area.y + area.h + 28, area.w, 22, data.xAxisLabel, 10, COLORS.muted, 'center'));
   if (data.yAxisLabel) elements.push(textBox(frame.x + 4, frame.y + 8, 120, 22, data.yAxisLabel, 10, COLORS.muted, 'left'));
@@ -984,7 +1100,10 @@ function renderPieChart(
     const y = frame.y + 25 + rowHeight * index;
     elements.push(rectangle(legendX + legendW - 13, y + 13, 10, 10, colorString(item.color, COLORS.palette[index % COLORS.palette.length]), 5));
     elements.push(textBox(legendX + 52, y, legendW - 70, rowHeight, item.label, 12, COLORS.foreground, 'right'));
-    elements.push(textBox(legendX, y, 50, rowHeight, `${stringValue(item.value)}%`, 12, COLORS.foreground, 'left', true));
+    const value = Number(item.value) || 0;
+    const format = data.valueFormat === 'number' || (typeof data.unit === 'string' && data.unit.trim() !== '' && data.unit !== '%') ? 'number' : 'percent';
+    const labelValue = format === 'percent' ? value / total * 100 : value;
+    elements.push(textBox(legendX, y, 50, rowHeight, formatChartValue(labelValue, format, data.unit), 12, COLORS.foreground, 'left', true));
   });
 }
 
@@ -1114,7 +1233,8 @@ function renderShapeComposition(
       path = `M ${rx} 0 A ${rx} ${ry} 0 1 0 ${rx} ${h} A ${rx} ${ry} 0 1 0 ${rx} 0 Z`;
       if (type === 'ring') shapeFill = null;
     } else if (type === 'rounded-rectangle' || type === 'pill') {
-      const radius = typeof style.radius === 'number' ? Math.max(0, style.radius) : (type === 'pill' ? h / 2 : Math.min(18, h / 5));
+      const radiusScale = typeof ACTIVE_PRESENTATION_META.radiusScale === 'number' && Number.isFinite(ACTIVE_PRESENTATION_META.radiusScale) ? Math.max(0, Math.min(4, ACTIVE_PRESENTATION_META.radiusScale)) : 1;
+      const radius = typeof style.radius === 'number' ? Math.max(0, style.radius * radiusScale) : (type === 'pill' ? h / 2 : Math.min(18 * radiusScale, h / 5));
       path = roundedRectPath(w, h, radius);
     } else if (type === 'triangle') {
       path = `M ${w / 2} 0 L ${w} ${h} L 0 ${h} Z`;
