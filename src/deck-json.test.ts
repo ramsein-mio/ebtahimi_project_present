@@ -259,4 +259,25 @@ describe('shared JSON render contract', () => {
     }
   });
 
+
+  it('does not draw a positive-length bar for a zero value', () => {
+    const result = convertReferenceDeck({
+      presentation: { title: 'Zero-value bar', locale: 'en-US' },
+      slides: [{
+        id: 'zero-bar-01', order: 1, section: 'Test', layout: 'content', title: 'Zero and ten',
+        body: { lead: 'Values', bullets: [], emphasis: '' },
+        visual: {
+          type: 'bar-chart',
+          data: { series: [{ values: [{ label: 'Zero', value: 0 }, { label: 'Ten', value: 10 }] }] },
+          caption: null,
+        },
+      }],
+    });
+    const names = result.presentation.slides[0].elements
+      .filter((element) => element.kind === 'shape')
+      .map((element) => element.name);
+    expect(names).not.toContain('bar-1');
+    expect(names).toContain('bar-2');
+  });
+
 });
