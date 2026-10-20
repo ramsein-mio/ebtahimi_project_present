@@ -495,47 +495,7 @@ function visualData(v: unknown): Record<string, unknown> {
 
 export function hasValidVisual(visual: unknown): boolean {
   if (!visual || !isRecord(visual)) return false;
-  const type = visual.type;
-  if (!type || type === 'none') return false;
-  const data = visualData(visual);
-  switch (type) {
-    case 'icon-list': {
-      const items = data.items;
-      return Array.isArray(items) && items.length > 0;
-    }
-    case 'bar-chart': {
-      const series = data.series;
-      return Array.isArray(series)
-        && series.length > 0
-        && isRecord(series[0])
-        && Array.isArray(series[0].values)
-        && (series[0].values as unknown[]).length > 0;
-    }
-    case 'line-chart': {
-      const series = data.series;
-      if (!Array.isArray(series)) return false;
-      return series.some((item) => isRecord(item) && Array.isArray(item.points) && (item.points as unknown[]).length > 0);
-    }
-    case 'pie-chart': {
-      const slices = data.slices;
-      return Array.isArray(slices) && slices.length > 0;
-    }
-    case 'comparison-grid': {
-      const columns = data.columns;
-      const rows = data.rows;
-      return Array.isArray(columns) && columns.length > 0 && Array.isArray(rows) && rows.length > 0;
-    }
-    case 'shape-composition': {
-      return Array.isArray(data.elements) && data.elements.some(isRecord);
-    }
-    case 'table': {
-      const headers = data.headers;
-      const rows = data.rows;
-      return Array.isArray(headers) && headers.length > 0 && Array.isArray(rows) && rows.length > 0;
-    }
-    default:
-      return true;
-  }
+  return typeof visual.type === 'string' && visual.type.trim().length > 0 && visual.type !== 'none';
 }
 
 export function visualHasContent(visual: unknown): boolean {
@@ -1229,6 +1189,7 @@ function addVisual(
   const visual = source.visual;
   if (!hasValidVisual(visual)) return;
   addVisualFrame(elements, frame.x, frame.y, frame.w, frame.h);
+  const contentStart = elements.length;
   switch (visual.type) {
     case 'icon-list': renderIconList(visual, elements, frame); break;
     case 'bar-chart': renderBarChart(visual, elements, frame); break;
@@ -1239,6 +1200,7 @@ function addVisual(
     case 'shape-composition': renderShapeComposition(visual, elements, frame); break;
     default: renderGenericVisual(visual, elements, frame); break;
   }
+  if (elements.length === contentStart) renderGenericVisual(visual, elements, frame);
 }
 
 function contentSlide(source: ReferenceSlideInput, deck: ReferenceDeckInput): Slide {
