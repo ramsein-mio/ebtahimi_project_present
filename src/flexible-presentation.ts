@@ -53,7 +53,42 @@ function normalizeShapeComposition(data: RecordValue): RecordValue {
     const h = linear ? safeNumber(item.h, 0) : Math.min(1 - y, Math.max(0.001, safeNumber(item.h, 0.12, 0.001)));
     const knownTypes = ['rectangle','rounded-rectangle','pill','circle','ellipse','ring','triangle','diamond','line','connector','arrow','polygon','text','bracket','arc'];
     const content = isRecord(item.content) ? item.content : {};
-    const style = isRecord(item.style) ? item.style : {};
+    const rawStyle = isRecord(item.style) ? item.style : {};
+    const style: RecordValue = { ...rawStyle };
+    for (const key of ['fill', 'stroke', 'color']) {
+      const rawColor = style[key];
+      if (rawColor == null || typeof rawColor === 'string') continue;
+      if (isRecord(rawColor) && typeof rawColor.color === 'string') style[key] = rawColor.color;
+      else if (isRecord(rawColor) && Array.isArray(rawColor.stops)) {
+        const firstStop = rawColor.stops.find(isRecord);
+        style[key] = firstStop ? textValue(firstStop.color ?? firstStop.value, key === 'fill' ? '#e5e7eb' : '#374151') : (key === 'fill' ? '#e5e7eb' : '#374151');
+      } else style[key] = key === 'fill' ? '#e5e7eb' : key === 'stroke' ? '#374151' : '#111827';
+    }
+    for (const key of ['strokeWidth', 'fontSize', 'radius', 'fontScale']) {
+      if (key in style && !(typeof style[key] === 'number' && Number.isFinite(style[key]) && Number(style[key]) > 0)) {
+        const parsed = typeof style[key] === 'string' ? Number(style[key]) : NaN;
+        if (Number.isFinite(parsed) && parsed > 0) style[key] = parsed;
+        else delete style[key];
+      }
+    }
+    if ('opacity' in style) {
+      const opacity = typeof style.opacity === 'number' ? style.opacity : Number(style.opacity);
+      style.opacity = Number.isFinite(opacity) ? Math.max(0, Math.min(1, opacity)) : 1;
+    }
+    if ('fontWeight' in style) {
+      const weight = style.fontWeight;
+      const numeric = typeof weight === 'string' ? Number(weight) : weight;
+      style.fontWeight = weight === 'bold' || weight === 'normal' ? weight
+        : typeof numeric === 'number' && Number.isInteger(numeric) && numeric >= 100 && numeric <= 900 && numeric % 100 === 0 ? numeric : 'normal';
+    }
+    if ('textAlign' in style && !['left', 'center', 'right'].includes(String(style.textAlign))) style.textAlign = 'right';
+    if ('verticalAlign' in style && !['top', 'middle', 'bottom'].includes(String(style.verticalAlign))) style.verticalAlign = 'middle';
+    for (const key of ['lineDash', 'dash']) {
+      if (key in style && (!Array.isArray(style[key]) || style[key].some((n) => typeof n !== 'number' || !Number.isFinite(n) || n <= 0))) {
+        style[key] = Array.isArray(style[key]) ? style[key].filter((n) => typeof n === 'number' && Number.isFinite(n) && n > 0) : [];
+      }
+    }
+    if ('endArrow' in style && typeof style.endArrow !== 'boolean') style.endArrow = Boolean(style.endArrow);
     const normalizedContent: RecordValue = { ...content };
     for (const key of ['text', 'value', 'side']) {
       if (key in normalizedContent && normalizedContent[key] != null && typeof normalizedContent[key] !== 'string') {
@@ -77,6 +112,45 @@ function normalizeShapeComposition(data: RecordValue): RecordValue {
     };
   });
   return { ...data, version: 1, elements: normalized };
+}
+
+function normalizeTheme(value: unknown): unknown {
+  if (!isRecord(value)) return value;
+  const theme: RecordValue = { ...value };
+  for (const key of ['background','foreground','text','muted','surface','soft','border','soft2','highlight','primary','secondary','accent']) {
+    if (key in theme && typeof theme[key] !== 'string') {
+      const raw = theme[key];
+      theme[key] = isRecord(raw) && typeof raw.color === 'string' ? raw.color : '#64748b';
+    }
+  }
+  if ('palette' in theme && (!Array.isArray(theme.palette) || theme.palette.some((color) => typeof color !== 'string'))) {
+    theme.palette = Array.isArray(theme.palette) ? theme.palette.map((color) => textValue(color, '#64748b')) : [];
+  }
+  if ('semanticColors' in theme && isRecord(theme.semanticColors)) {
+    theme.semanticColors = Object.fromEntries(Object.entries(theme.semanticColors).map(([key, color]) => [
+      key, typeof color === 'string' ? color : isRecord(color) && typeof color.color === 'string' ? color.color : '#64748b',
+    ]));
+  }
+  if ('fontFamily' in theme && !(typeof theme.fontFamily === 'string' || Array.isArray(theme.fontFamily) && theme.fontFamily.every((font) => typeof font === 'string'))) {
+    theme.fontFamily = Array.isArray(theme.fontFamily) ? theme.fontFamily.map((font) => textValue(font)).filter(Boolean) : 'Vazirmatn';
+  }
+  return theme;
+}
+
+function normalizeCanvas(value: unknown): unknown {
+  if (!isRecord(value)) return value;
+  const canvas: RecordValue = { ...value };
+  for (const key of ['width', 'height']) {
+    if (key in canvas) {
+      const n = typeof canvas[key] === 'number' ? canvas[key] : Number(canvas[key]);
+      if (Number.isFinite(n) && n > 0) canvas[key] = n;
+      else delete canvas[key];
+    }
+  }
+  if ('aspectRatio' in canvas && (typeof canvas.aspectRatio !== 'string' || !/^\\d+(?:\\.\\d+)?\\s*:\\s*\\d+(?:\\.\\d+)?$/.test(canvas.aspectRatio))) delete canvas.aspectRatio;
+  if ('background' in canvas && typeof canvas.background !== 'string') canvas.background = '#ffffff';
+  if ('fullscreen' in canvas && typeof canvas.fullscreen !== 'boolean') canvas.fullscreen = Boolean(canvas.fullscreen);
+  return canvas;
 }
 
 function normalizeVisual(value: unknown): RecordValue {
@@ -121,12 +195,14 @@ function normalizeSlide(value: unknown, index: number): RecordValue {
     title: textValue(source.title ?? source.heading, `اسلاید ${index + 1}`) || `اسلاید ${index + 1}`,
     subtitle: source.subtitle == null || source.subtitle === '' ? null : textValue(source.subtitle),
     body: {
-      ...bodySource,
+        ...bodySource,
       lead: richLine(bodySource.lead ?? source.content ?? source.text),
       bullets,
       emphasis,
     },
     visual: normalizeVisual(source.visual),
+    ...(source.theme != null ? { theme: normalizeTheme(source.theme) } : {}),
+    ...(source.canvas != null ? { canvas: normalizeCanvas(source.canvas) } : {}),
     speakerNotes: textValue(source.speakerNotes ?? source.notes),
     durationSeconds,
     psychologicalPurpose: textValue(source.psychologicalPurpose ?? source.purpose, 'ارائه و توضیح مفهوم'),
@@ -183,6 +259,9 @@ export function normalizeFlexiblePresentation(value: unknown): unknown {
   const total = rawSlides.reduce((sum, slide) => sum + safeNumber(slide.durationSeconds, 45, 0.001), 0);
   const metadata: RecordValue = {
     ...rawMeta,
+    ...(rawMeta.design != null ? { design: normalizeTheme(rawMeta.design) } : {}),
+    ...(rawMeta.canvas != null ? { canvas: normalizeCanvas(rawMeta.canvas) } : {}),
+    ...(rawMeta.background != null && typeof rawMeta.background !== 'string' ? { background: isRecord(rawMeta.background) && typeof rawMeta.background.color === 'string' ? rawMeta.background.color : '#ffffff' } : {}),
     title: textValue(rawMeta.title ?? value.title, 'ارائه') || 'ارائه',
     subtitle: rawMeta.subtitle == null || rawMeta.subtitle === '' ? null : textValue(rawMeta.subtitle),
     language: textValue(rawMeta.language, 'fa'),
