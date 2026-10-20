@@ -111,7 +111,7 @@ function normalizeShapeComposition(data: RecordValue): RecordValue {
       ...(typeof item.rotation === 'number' && Number.isFinite(item.rotation) ? {} : { rotation: 0 }),
     };
   });
-  return { ...data, version: 1, elements: normalized };
+  return { ...data, ...(data.canvas != null ? { canvas: normalizeCanvas(data.canvas) } : {}), version: 1, elements: normalized };
 }
 
 function normalizeTheme(value: unknown): unknown {
@@ -160,7 +160,9 @@ function normalizeVisual(value: unknown): RecordValue {
   if (!isRecord(value)) return { type: 'custom', data: { value }, caption: null };
   const type = textValue(value.type, 'custom').trim() || 'custom';
   const rawData = value.data;
-  const data = isRecord(rawData) ? rawData : rawData == null ? {} : { value: rawData };
+  const data = type === 'shape-composition' && Array.isArray(rawData)
+    ? { elements: rawData }
+    : isRecord(rawData) ? rawData : rawData == null ? {} : { value: rawData };
   const normalizedData = type === 'shape-composition' ? normalizeShapeComposition(data) : data;
   return {
     ...value,
