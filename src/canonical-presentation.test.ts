@@ -180,7 +180,7 @@ describe('canonical presentation contract', () => {
       version: 1,
       canvas: { aspectRatio: '16:9', background: 'theme' },
       elements: [
-        { id: 'title', type: 'text', x: 0.1, y: 0.2, w: 0.8, h: 0.2, style: { fontSize: 36, fontWeight: 700, color: '#F0F6FC', textAlign: 'right', verticalAlign: 'middle' }, content: { text: 'عنوان' } },
+        { id: 'title', type: 'text', x: 0.1, y: 0.2, w: 0.8, h: 0.2, style: { fontSize: 36, fontWeight: 'bold', color: '#F0F6FC', textAlign: 'right', verticalAlign: 'middle' }, content: { text: 'عنوان' } },
         { id: 'circle', type: 'circle', x: 0.2, y: 0.3, w: 0.2, h: 0.2, style: { fill: '#1F6FEB', opacity: 0.8 } },
       ],
     };
