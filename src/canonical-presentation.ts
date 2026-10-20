@@ -95,7 +95,7 @@ function isColorExpression(value: unknown): value is string {
   if (typeof value !== 'string' || !value.trim()) return false;
   const color = value.trim();
   return /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(color)
-    || /^(?:rgb|rgba|hsl|hsla)\([\d\s.,%+\-/degturnrad]*\)$/i.test(color)
+    || /^(?:rgb|rgba|hsl|hsla)\([\d\s.,%+\-\/a-z]*\)$/i.test(color)
     || /^(?:transparent|currentcolor|[a-z][a-z-]*)$/i.test(color)
     || /^theme(?:\.[a-z][a-z\d_-]*(?:\.[a-z\d_-]+)*)?$/i.test(color);
 }
