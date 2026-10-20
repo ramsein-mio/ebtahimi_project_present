@@ -213,6 +213,13 @@ function firstStrongTextDirection(value: unknown): 'rtl' | 'ltr' | null {
   return null;
 }
 
+function isRtlLayout(): boolean {
+  const direction = ACTIVE_PRESENTATION_META.direction;
+  if (direction === 'rtl') return true;
+  if (direction === 'ltr') return false;
+  return inferredDirection(ACTIVE_PRESENTATION_META.locale ?? ACTIVE_PRESENTATION_META.language) === 'rtl';
+}
+
 function rgbForColor(value: string): [number, number, number] | null {
   const match = value.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
   if (!match) return null;
@@ -900,6 +907,7 @@ function renderIconList(
   const captionSpace = visualCaption(visual.caption, elements, frame);
   const content = { x: frame.x + 18, y: frame.y + 18, w: frame.w - 36, h: frame.h - 36 - captionSpace };
   const columns = items.length <= 2 ? 1 : 2;
+  const rtl = isRtlLayout();
   const rows = Math.ceil(items.length / columns);
   const gap = 10;
   const cardW = (content.w - gap * (columns - 1)) / columns;
@@ -907,7 +915,8 @@ function renderIconList(
   items.forEach((item, index) => {
     const column = index % columns;
     const row = Math.floor(index / columns);
-    const x = content.x + (columns - 1 - column) * (cardW + gap);
+    const visualColumn = rtl ? columns - 1 - column : column;
+    const x = content.x + visualColumn * (cardW + gap);
     const y = content.y + row * (cardH + gap);
     elements.push(rectangle(x, y, cardW, cardH, COLORS.soft, 10, null, `icon-card-${index + 1}`));
     elements.push(rectangle(x + cardW - 52, y + 12, 38, 38, COLORS.background, 19, { color: COLORS.soft2, width: 1, dash: null }));
