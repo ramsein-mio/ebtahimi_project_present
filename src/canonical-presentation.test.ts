@@ -149,7 +149,7 @@ describe('canonical presentation contract', () => {
     expect(result.errors.some((issue) => issue.path.endsWith('elements[0].type'))).toBe(true);
   });
 
-  it('reports visual types that have no renderer instead of treating them as supported', () => {
+  it('warns on unknown visuals so unrelated slide content remains usable', () => {
     const result = validateCanonicalPresentation({
       ...valid,
       slides: [{ ...slide, visual: { type: 'timeline', data: {}, caption: null } }],
@@ -203,6 +203,155 @@ describe('canonical presentation contract', () => {
     });
     expect(result.errors.some((issue) => issue.path.endsWith('.style.opacity'))).toBe(true);
     expect(result.errors.some((issue) => issue.path.endsWith('.style.verticalAlign'))).toBe(true);
+  });
+
+
+  it('rejects duplicate slide orders and an empty slide collection', () => {
+    const duplicateOrder = validateCanonicalPresentation({
+      ...valid,
+      slides: [slide, { ...slide, id: 'slide-02', title: 'دوم', order: 1 }],
+    });
+    expect(duplicateOrder.errors.some((issue) => issue.path === 'slides[1].order')).toBe(true);
+
+    const emptySlides = validateCanonicalPresentation({ ...valid, slides: [] });
+    expect(emptySlides.errors.some((issue) => issue.path === 'slides')).toBe(true);
+  });
+
+  it('rejects zero-ratio canvases and invalid safe-area values', () => {
+    const result = validateCanonicalPresentation({
+      ...valid,
+      presentation: {
+        ...valid.presentation,
+        canvas: { aspectRatio: '0:9', safeArea: { left: -1 } },
+      },
+    });
+    expect(result.errors.some((issue) => issue.path === 'presentation.canvas.aspectRatio')).toBe(true);
+    expect(result.errors.some((issue) => issue.path === 'presentation.canvas.safeArea.left')).toBe(true);
+  });
+
+  it('rejects malformed chart values and mismatched table row widths', () => {
+    const result = validateCanonicalPresentation({
+      ...valid,
+      slides: [{
+        ...slide,
+        visual: {
+          type: 'bar-chart',
+          caption: null,
+          data: {
+            series: [
+              { name: 'A', values: [{ label: 'اول', value: -2 }] },
+              { name: 'B', values: [{ label: 'دوم', value: 4 }] },
+            ],
+          },
+        },
+      }],
+    });
+    expect(result.errors.some((issue) => issue.path.endsWith('.value'))).toBe(true);
+    expect(result.errors.some((issue) => issue.path.endsWith('.values'))).toBe(true);
+
+    const table = validateCanonicalPresentation({
+      ...valid,
+      slides: [{
+        ...slide,
+        visual: { type: 'table', caption: null, data: { headers: ['A', 'B'], rows: [['only one']] } },
+      }],
+    });
+    expect(table.errors.some((issue) => issue.path === 'slides[0].visual.data.rows[0]')).toBe(true);
+  });
+
+  it('requires fullscreen graphic layouts to have a shape-composition visual', () => {
+    const result = validateCanonicalPresentation({
+      ...valid,
+      slides: [{ ...slide, layout: 'full-bleed' }],
+    });
+    expect(result.errors.some((issue) => issue.path === 'slides[0].layout')).toBe(true);
+  });
+
+  it('rejects a zero-vector line and requires readable content for text shapes', () => {
+    const noVector = validateCanonicalPresentation({
+      ...valid,
+      slides: [{
+        ...slide,
+        visual: {
+          type: 'shape-composition', caption: null,
+          data: { version: 1, elements: [{ id: 'line-1', type: 'line', x: 0.2, y: 0.2, w: 0, h: 0 }] },
+        },
+      }],
+    });
+    expect(noVector.errors.some((issue) => issue.path === 'slides[0].visual.data.elements[0]')).toBe(true);
+
+    const noText = validateCanonicalPresentation({
+      ...valid,
+      slides: [{
+        ...slide,
+        visual: {
+          type: 'shape-composition', caption: null,
+          data: { version: 1, elements: [{ id: 'text-1', type: 'text', x: 0.1, y: 0.1, w: 0.5, h: 0.2 }] },
+        },
+      }],
+    });
+    expect(noText.errors.some((issue) => issue.path === 'slides[0].visual.data.elements[0].content')).toBe(true);
+  });
+
+  it('rejects unknown layout config keys instead of silently ignoring them', () => {
+    const result = validateCanonicalPresentation({
+      ...valid,
+      slides: [{ ...slide, layoutConfig: { gap: 20, typoPadding: 50 } }],
+    });
+    expect(result.errors.some((issue) => issue.path === 'slides[0].layoutConfig.typoPadding')).toBe(true);
+  });
+
+
+  it('accepts theme font sizes as absolute values while bounding scale factors', () => {
+    const accepted = validateCanonicalPresentation({
+      ...valid,
+      presentation: {
+        ...valid.presentation,
+        design: { fontSize: 42, fontScale: 1.25, palette: ['#123456', 'hsl(25 80% 50%)'] },
+      },
+    });
+    expect(accepted.valid).toBe(true);
+
+    const rejected = validateCanonicalPresentation({
+      ...valid,
+      presentation: {
+        ...valid.presentation,
+        design: { fontSize: 900, fontScale: 99 },
+      },
+    });
+    expect(rejected.errors.some((issue) => issue.path === 'presentation.design.fontSize')).toBe(true);
+    expect(rejected.errors.some((issue) => issue.path === 'presentation.design.fontScale')).toBe(true);
+  });
+
+  it('preserves asset metadata without assuming a renderer-specific asset schema', () => {
+    const result = validateCanonicalPresentation({
+      ...valid,
+      presentation: {
+        ...valid.presentation,
+        assets: [{ kind: 'illustration', sourceId: 'asset-1', metadata: { license: 'internal' } }],
+      },
+    });
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects non-finite-scale chart values and excessive shape counts', () => {
+    const chart = validateCanonicalPresentation({
+      ...valid,
+      slides: [{
+        ...slide,
+        visual: { type: 'pie-chart', caption: null, data: { slices: [{ label: 'A', value: 1e100 }] } },
+      }],
+    });
+    expect(chart.errors.some((issue) => issue.path === 'slides[0].visual.data.slices[0].value')).toBe(true);
+
+    const shapes = Array.from({ length: 501 }, (_, index) => ({
+      id: 'shape-' + index, type: 'rectangle', x: 0.1, y: 0.1, w: 0.1, h: 0.1,
+    }));
+    const composition = validateCanonicalPresentation({
+      ...valid,
+      slides: [{ ...slide, visual: { type: 'shape-composition', caption: null, data: { version: 1, elements: shapes } } }],
+    });
+    expect(composition.errors.some((issue) => issue.path === 'slides[0].visual.data.elements')).toBe(true);
   });
 
 });

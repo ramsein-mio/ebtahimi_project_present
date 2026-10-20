@@ -152,4 +152,132 @@ describe('shared JSON render contract', () => {
     expect(result.presentation.slides[0].elements[0]).toMatchObject({ x: 0, y: 0, w: 1280, h: 720 });
   });
 
+
+  it('fits composition aspect ratios and applies safe-area insets', () => {
+    const result = convertReferenceDeck({
+      presentation: { title: 'Square canvas' },
+      slides: [{
+        id: 'square-01', order: 1, layout: 'graphic-fullscreen', title: 'Square',
+        visual: {
+          type: 'shape-composition',
+          data: {
+            version: 1,
+            canvas: { width: 1000, height: 1000, safeArea: { top: 20, right: 20, bottom: 20, left: 20 } },
+            elements: [{ id: 'full-canvas', type: 'rectangle', x: 0, y: 0, w: 1, h: 1, style: { fill: '#123456', stroke: 'none' } }],
+          },
+        },
+      }],
+    });
+
+    const shape = result.presentation.slides[0].elements[0];
+    expect(shape.x).toBeCloseTo(294.4, 4);
+    expect(shape.y).toBeCloseTo(14.4, 4);
+    expect(shape.w).toBeCloseTo(691.2, 4);
+    expect(shape.h).toBeCloseTo(691.2, 4);
+  });
+
+  it('uses named themes while allowing presentation.design to override theme tokens', () => {
+    const result = convertReferenceDeck({
+      presentation: {
+        title: 'Theme precedence',
+        theme: 'ocean',
+        design: {
+          background: '#10131a',
+          foreground: '#f5f7fa',
+          palette: ['#123456', '#654321', '#abcdef'],
+        },
+      },
+      slides: [{
+        id: 'tokens-02', order: 1, layout: 'graphic-fullscreen', title: 'Tokens',
+        visual: {
+          type: 'shape-composition',
+          data: {
+            version: 1,
+            canvas: { aspectRatio: '16:9', background: 'theme' },
+            elements: [{ id: 'primary', type: 'rectangle', x: 0.1, y: 0.1, w: 0.2, h: 0.2, style: { fill: 'theme.primary', stroke: 'none' } }],
+          },
+        },
+      }],
+    });
+
+    const slide = result.presentation.slides[0];
+    expect(slide.background).toEqual({ type: 'solid', color: '#10131a' });
+    const primary = slide.elements.find((element) => element.name === 'primary');
+    expect(primary).toMatchObject({ kind: 'shape', fill: { type: 'solid', color: '#123456' } });
+  });
+
+  it('renders all aligned series in a multi-series bar chart', () => {
+    const result = convertReferenceDeck({
+      presentation: { title: 'Multi-series bars', direction: 'ltr', locale: 'en-US' },
+      slides: [{
+        id: 'bars-01', order: 1, section: 'Test', layout: 'content', title: 'Grouped values',
+        body: { lead: 'Values by category', bullets: [], emphasis: '' },
+        visual: {
+          type: 'bar-chart',
+          data: {
+            unit: 'items',
+            series: [
+              { name: 'First', color: '#123456', values: [{ label: 'Q1', value: 10 }, { label: 'Q2', value: 20 }] },
+              { name: 'Second', color: '#654321', values: [{ label: 'Q1', value: 15 }, { label: 'Q2', value: 25 }] },
+            ],
+          },
+          caption: null,
+        },
+      }],
+    });
+
+    const bars = result.presentation.slides[0].elements.filter((element) =>
+      element.kind === 'shape' && typeof element.name === 'string' && element.name.startsWith('bar-'),
+    );
+    expect(bars).toHaveLength(4);
+  });
+
+  it('places numeric line-chart X values proportionally instead of at equal category intervals', () => {
+    const result = convertReferenceDeck({
+      presentation: { title: 'Numeric X', locale: 'en-US' },
+      slides: [{
+        id: 'line-x-01', order: 1, section: 'Test', layout: 'content', title: 'Numeric scale',
+        body: { lead: 'x values: 0, 10, 100', bullets: [], emphasis: '' },
+        visual: {
+          type: 'line-chart',
+          data: { series: [{ name: 'Data', points: [{ x: 0, y: 1 }, { x: 10, y: 2 }, { x: 100, y: 3 }] }] },
+          caption: null,
+        },
+      }],
+    });
+
+    const line = result.presentation.slides[0].elements.find((element) => element.name === 'line-series-1');
+    expect(line?.kind).toBe('shape');
+    const path = line && line.kind === 'shape' ? String((line as unknown as Record<string, unknown>).path ?? '') : '';
+    const coordinates = path.match(/^M\s*([\d.]+)\s+([\d.]+)\s+L\s*([\d.]+)\s+([\d.]+)/);
+    expect(coordinates).not.toBeNull();
+    if (coordinates && line && line.kind === 'shape') {
+      const firstX = Number(coordinates[1]);
+      const secondX = Number(coordinates[3]);
+      expect(firstX).toBeCloseTo(0);
+      expect(secondX / line.w).toBeCloseTo(0.1, 2);
+    }
+  });
+
+
+  it('does not draw a positive-length bar for a zero value', () => {
+    const result = convertReferenceDeck({
+      presentation: { title: 'Zero-value bar', locale: 'en-US' },
+      slides: [{
+        id: 'zero-bar-01', order: 1, section: 'Test', layout: 'content', title: 'Zero and ten',
+        body: { lead: 'Values', bullets: [], emphasis: '' },
+        visual: {
+          type: 'bar-chart',
+          data: { series: [{ values: [{ label: 'Zero', value: 0 }, { label: 'Ten', value: 10 }] }] },
+          caption: null,
+        },
+      }],
+    });
+    const names = result.presentation.slides[0].elements
+      .filter((element) => element.kind === 'shape')
+      .map((element) => element.name);
+    expect(names).not.toContain('bar-1');
+    expect(names).toContain('bar-2');
+  });
+
 });
