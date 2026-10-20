@@ -148,7 +148,7 @@ function normalizeCanvas(value: unknown): unknown {
       else delete canvas[key];
     }
   }
-  if ('aspectRatio' in canvas && (typeof canvas.aspectRatio !== 'string' || !/^\\d+(?:\\.\\d+)?\\s*:\\s*\\d+(?:\\.\\d+)?$/.test(canvas.aspectRatio))) delete canvas.aspectRatio;
+  if ('aspectRatio' in canvas && (typeof canvas.aspectRatio !== 'string' || !/^\d+(?:\.\d+)?\s*:\s*\d+(?:\.\d+)?$/.test(canvas.aspectRatio))) delete canvas.aspectRatio;
   if ('background' in canvas && typeof canvas.background !== 'string') canvas.background = '#ffffff';
   if ('fullscreen' in canvas && typeof canvas.fullscreen !== 'boolean') canvas.fullscreen = Boolean(canvas.fullscreen);
   return canvas;
