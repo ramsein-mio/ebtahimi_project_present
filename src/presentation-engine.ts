@@ -15,7 +15,7 @@ import {
 } from '@web-ppt/edit-core';
 import { tableCellBody } from './editor/table-model';
 import { convertReferenceDeck, isReferenceDeck } from './deck-json';
-import { parseCanonicalPresentation } from './canonical-presentation';
+import { validateCanonicalPresentation } from './canonical-presentation';
 import type { ValidationResult } from './types';
 
 export interface TextElementInfo {
@@ -96,7 +96,7 @@ export function validatePresentationJson(source: string): ValidationResult {
     // reaches the legacy-compatible renderer. Non-canonical/native inputs keep
     // their existing import path unchanged.
     if (canonical) {
-      const validation = parseCanonicalPresentation(source);
+      const validation = validateCanonicalPresentation(value, { allowUnknownKeys: true });
       warnings = validation.warnings.map((issue) => `${issue.path}: ${issue.message}`);
       if (!validation.valid) {
         const issues = validation.errors.slice(0, 8).map((issue) => `${issue.path}: ${issue.message}`);
