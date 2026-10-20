@@ -136,7 +136,7 @@ function validateRenderCanvas(value: unknown, path: string, errors: ValidationIs
   for (const key of ['width','height']) if (key in value && (typeof value[key] !== 'number' || !Number.isInteger(value[key]) || !Number.isFinite(value[key]) || Number(value[key]) < 1 || Number(value[key]) > 8192)) issue(errors, path + '.' + key, 'Canvas dimension must be a supported positive integer.', 'integer in [1, 8192]', value[key]);
   if ('aspectRatio' in value) {
     const match = typeof value.aspectRatio === 'string' ? value.aspectRatio.match(/^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/) : null;
-    if (!match || Number(match[1]) <= 0 || Number(match[2]) <= 0 || !Number.isFinite(Number(match[1])) || !Number.isFinite(Number(match[2]))) issue(errors, path + '.aspectRatio', 'Aspect ratio must contain two positive numbers.', 'positive W:H ratio, e.g. 16:9', value.aspectRatio);
+    if (!match || Number(match[1]) <= 0 || Number(match[2]) <= 0 || !Number.isFinite(Number(match[1])) || !Number.isFinite(Number(match[2])) || Number(match[1]) / Number(match[2]) > 8192 || Number(match[1]) / Number(match[2]) < 1 / 8192) issue(errors, path + '.aspectRatio', 'Aspect ratio must contain positive values that fit the supported canvas bounds.', 'W:H ratio between 1:8192 and 8192:1', value.aspectRatio);
   }
   if ('background' in value) validateColor(value.background, path + '.background', errors);
   if ('fullscreen' in value && typeof value.fullscreen !== 'boolean') issue(errors, path + '.fullscreen', 'fullscreen must be boolean.', 'boolean', value.fullscreen);
