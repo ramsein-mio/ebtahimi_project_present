@@ -175,7 +175,7 @@ export function parsePresentationYaml(source: string): unknown {
           const [key, rawValue] = pair(rest, line);
           const item: Record<string, unknown> = {};
           if (rawValue) item[key] = parseScalar(rawValue, line.number);
-          else if (cursor < lines.length && lines[cursor].indent > virtualIndent) item[key] = parseBlock(lines[cursor].indent);
+          else if (cursor < lines.length && lines[cursor].indent >= virtualIndent) item[key] = parseBlock(lines[cursor].indent);
           else item[key] = null;
           if (cursor < lines.length && lines[cursor].indent > indent) {
             const continuationIndent = lines[cursor].indent;
