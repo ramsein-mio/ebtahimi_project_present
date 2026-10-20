@@ -4,6 +4,8 @@ import {
   COMPOSITION_STYLE_KEYS,
   SUPPORTED_COMPOSITION_SHAPE_TYPES,
 } from './shape-composition-contract';
+import { isSupportedVisualType, VISUAL_RENDERER_REGISTRY } from './visual-contract';
+import { THEMES } from './viewer/themes';
 
 export type CognitiveLoad = 'low' | 'medium' | 'high';
 export type RichTextLine = string | { text: string; details: string };
@@ -80,20 +82,51 @@ function exactKeys(value: Record<string, unknown>, expected: string[], path: str
   for (const key of expected) if (!optional.includes(key) && !(key in value)) errors.push({ path: path ? path + '.' + key : key, message: 'Required field is missing.', expected: 'present', actual: 'missing', severity: 'error' });
   for (const key of Object.keys(value)) if (!expected.includes(key)) errors.push({ path: path ? path + '.' + key : key, message: 'Unexpected field in canonical object.', expected: 'one of the canonical fields', actual: 'unexpected key', severity: 'error' });
 }
+const THEME_KEYS = [
+  'background','foreground','text','muted','surface','soft','border','soft2','highlight',
+  'primary','secondary','accent','palette','fontFamily','fontSize','fontScale','radiusScale',
+  'shadowStyle','direction','contrast','semanticColors',
+];
+const THEME_COLOR_KEYS = ['background','foreground','text','muted','surface','soft','border','soft2','highlight','primary','secondary','accent'];
+function issue(errors: ValidationIssue[], path: string, message: string, expected: string, value: unknown) {
+  errors.push({ path, message, expected, actual: actualType(value), severity: 'error' });
+}
+function expectFiniteNumber(value: unknown, path: string, errors: ValidationIssue[], min = -Infinity, max = Infinity): value is number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) {
+    errors.push({ path, message: 'Expected a finite number in the supported range.', expected: `${min}..${max}`, actual: actualType(value), severity: 'error' });
+    return false;
+  }
+  return true;
+}
 function validateRenderTheme(value: unknown, path: string, errors: ValidationIssue[]) {
-  if (!isRecord(value)) { errors.push({ path, message: 'Theme must be an object.', expected: 'theme object', actual: actualType(value), severity: 'error' }); return; }
-  const colorKeys = ['background','foreground','text','muted','surface','soft','border','soft2','highlight','primary','secondary','accent'];
-  for (const key of colorKeys) if (key in value && typeof value[key] !== 'string') errors.push({ path: path + '.' + key, message: 'Theme color must be a string.', expected: 'CSS color string or theme token', actual: actualType(value[key]), severity: 'error' });
-  if ('palette' in value && (!Array.isArray(value.palette) || value.palette.some((color) => typeof color !== 'string'))) errors.push({ path: path + '.palette', message: 'Palette must be an array of color strings.', expected: 'string[]', actual: actualType(value.palette), severity: 'error' });
-  if ('semanticColors' in value && (!isRecord(value.semanticColors) || Object.values(value.semanticColors).some((color) => typeof color !== 'string'))) errors.push({ path: path + '.semanticColors', message: 'Semantic colors must map names to strings.', expected: 'Record<string, string>', actual: actualType(value.semanticColors), severity: 'error' });
-  if ('fontFamily' in value && !(typeof value.fontFamily === 'string' || Array.isArray(value.fontFamily) && value.fontFamily.every((font) => typeof font === 'string'))) errors.push({ path: path + '.fontFamily', message: 'Font family must be a string or string array.', expected: 'string | string[]', actual: actualType(value.fontFamily), severity: 'error' });
+  if (!isRecord(value)) { issue(errors, path, 'Theme must be an object.', 'theme object', value); return; }
+  exactKeys(value, THEME_KEYS, path, errors, THEME_KEYS);
+  for (const key of THEME_COLOR_KEYS) if (key in value && typeof value[key] !== 'string') issue(errors, path + '.' + key, 'Theme color must be a string.', 'CSS color string or theme token', value[key]);
+  if ('palette' in value && (!Array.isArray(value.palette) || value.palette.some((color) => typeof color !== 'string'))) issue(errors, path + '.palette', 'Palette must be an array of color strings.', 'string[]', value.palette);
+  if ('semanticColors' in value && (!isRecord(value.semanticColors) || Object.values(value.semanticColors).some((color) => typeof color !== 'string'))) issue(errors, path + '.semanticColors', 'Semantic colors must map names to strings.', 'Record<string, string>', value.semanticColors);
+  if ('fontFamily' in value && !(typeof value.fontFamily === 'string' && value.fontFamily.trim().length > 0 || Array.isArray(value.fontFamily) && value.fontFamily.length > 0 && value.fontFamily.every((font) => typeof font === 'string' && font.trim().length > 0))) issue(errors, path + '.fontFamily', 'Font family must be a non-empty string or array.', 'string | non-empty string[]', value.fontFamily);
+  for (const key of ['fontSize','fontScale','radiusScale']) if (key in value && (typeof value[key] !== 'number' || !Number.isFinite(value[key]) || Number(value[key]) <= 0 || Number(value[key]) > 8 && key !== 'fontSize' || Number(value[key]) > 512 && key === 'fontSize')) issue(errors, path + '.' + key, 'Typography and radius values must be positive finite numbers within the supported bound.', key === 'fontSize' ? 'number in (0,512]' : 'number in (0,8]', value[key]);
+  if ('shadowStyle' in value && !['none','soft','medium','strong'].includes(String(value.shadowStyle))) issue(errors, path + '.shadowStyle', 'Unsupported shadow style.', 'none | soft | medium | strong', value.shadowStyle);
+  if ('contrast' in value && !['normal','high'].includes(String(value.contrast))) issue(errors, path + '.contrast', 'Unsupported contrast mode.', 'normal | high', value.contrast);
+  if ('direction' in value && !['ltr','rtl','auto'].includes(String(value.direction))) issue(errors, path + '.direction', 'Unsupported text direction.', 'ltr | rtl | auto', value.direction);
 }
 function validateRenderCanvas(value: unknown, path: string, errors: ValidationIssue[]) {
-  if (!isRecord(value)) { errors.push({ path, message: 'Canvas must be an object.', expected: 'canvas object', actual: actualType(value), severity: 'error' }); return; }
-  for (const key of ['width','height']) if (key in value && (typeof value[key] !== 'number' || !Number.isFinite(value[key]) || Number(value[key]) <= 0)) errors.push({ path: path + '.' + key, message: 'Canvas dimension must be positive.', expected: 'number > 0', actual: actualType(value[key]), severity: 'error' });
-  if ('aspectRatio' in value && (typeof value.aspectRatio !== 'string' || !/^\d+(?:\.\d+)?\s*:\s*\d+(?:\.\d+)?$/.test(value.aspectRatio))) errors.push({ path: path + '.aspectRatio', message: 'Aspect ratio must use W:H notation.', expected: 'e.g. 16:9', actual: actualType(value.aspectRatio), severity: 'error' });
-  if ('background' in value && typeof value.background !== 'string') errors.push({ path: path + '.background', message: 'Canvas background must be a color string.', expected: 'CSS color string', actual: actualType(value.background), severity: 'error' });
-  if ('fullscreen' in value && typeof value.fullscreen !== 'boolean') errors.push({ path: path + '.fullscreen', message: 'fullscreen must be boolean.', expected: 'boolean', actual: actualType(value.fullscreen), severity: 'error' });
+  if (!isRecord(value)) { issue(errors, path, 'Canvas must be an object.', 'canvas object', value); return; }
+  for (const key of ['width','height']) if (key in value && (typeof value[key] !== 'number' || !Number.isInteger(value[key]) || !Number.isFinite(value[key]) || Number(value[key]) < 1 || Number(value[key]) > 8192)) issue(errors, path + '.' + key, 'Canvas dimension must be a supported positive integer.', 'integer in [1, 8192]', value[key]);
+  if ('aspectRatio' in value) {
+    const match = typeof value.aspectRatio === 'string' ? value.aspectRatio.match(/^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/) : null;
+    if (!match || Number(match[1]) <= 0 || Number(match[2]) <= 0 || !Number.isFinite(Number(match[1])) || !Number.isFinite(Number(match[2]))) issue(errors, path + '.aspectRatio', 'Aspect ratio must contain two positive numbers.', 'positive W:H ratio, e.g. 16:9', value.aspectRatio);
+  }
+  if ('background' in value && typeof value.background !== 'string') issue(errors, path + '.background', 'Canvas background must be a color string or theme token.', 'string', value.background);
+  if ('fullscreen' in value && typeof value.fullscreen !== 'boolean') issue(errors, path + '.fullscreen', 'fullscreen must be boolean.', 'boolean', value.fullscreen);
+  if ('mode' in value && (typeof value.mode !== 'string' || !['fullscreen','fit','fixed'].includes(value.mode))) issue(errors, path + '.mode', 'Unsupported canvas mode.', 'fullscreen | fit | fixed', value.mode);
+  if ('safeArea' in value) {
+    if (!isRecord(value.safeArea)) issue(errors, path + '.safeArea', 'safeArea must be an object.', 'object with optional inset numbers', value.safeArea);
+    else {
+      exactKeys(value.safeArea, ['top','right','bottom','left'], path + '.safeArea', errors, ['top','right','bottom','left']);
+      for (const key of ['top','right','bottom','left']) if (key in value.safeArea && !expectFiniteNumber(value.safeArea[key], path + '.safeArea.' + key, errors, 0, 4096)) { /* issue already recorded */ }
+    }
+  }
 }
 function expectString(v: unknown, path: string, errors: ValidationIssue[], nonEmpty = false): v is string {
   if (typeof v !== 'string' || (nonEmpty && !v.trim())) {
