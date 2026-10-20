@@ -1375,6 +1375,7 @@ function renderShapeComposition(
     }
     const rawText = typeof content.text === 'string' ? content.text : typeof content.value === 'string' ? content.value : typeof item.text === 'string' ? item.text : '';
     const isText = type === 'text' || rawText.length > 0;
+    const metadata = ACTIVE_PRESENTATION_META;
     const localScale = typeof style.fontScale === 'number' && Number.isFinite(style.fontScale) ? Math.max(0.1, Math.min(4, style.fontScale)) : 1;
     const rawFontSize = typeof style.fontSize === 'number' && Number.isFinite(style.fontSize) ? style.fontSize : typeof metadata.fontSize === 'number' && Number.isFinite(metadata.fontSize) ? metadata.fontSize : 16;
     const fontSizeUnit = style.fontSizeUnit;
