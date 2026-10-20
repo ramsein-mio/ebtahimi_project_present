@@ -534,7 +534,7 @@ export function hasValidVisual(visual: unknown): boolean {
       return Array.isArray(headers) && headers.length > 0 && Array.isArray(rows) && rows.length > 0;
     }
     default:
-      return Object.keys(data).length > 0;
+      return true;
   }
 }
 
