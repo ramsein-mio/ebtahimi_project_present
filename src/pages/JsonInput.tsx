@@ -114,7 +114,7 @@ export function JsonInput({ onBack, onGenerated }: JsonInputProps) {
         <div className="json-intro">
           <div className="step-badge">مرحلهٔ ۱ از ۲</div>
           <h1>داده را به اسلاید تبدیل کنید.</h1>
-          <p>JSON ارائه را با قرارداد <bdi dir="ltr">presentation + slides</bdi> وارد کنید. ترتیب، متن‌های نشانه‌گذاری‌شده و visualها دقیقاً به اسلایدهای قابل‌ویرایش تبدیل می‌شوند.</p>
+          <p>ساختار ارائه را به‌صورت JSON یا YAML با قرارداد <bdi dir="ltr">presentation + slides</bdi> وارد کنید. ترتیب، متن‌های نشانه‌گذاری‌شده و visualها دقیقاً به اسلایدهای قابل‌ویرایش تبدیل می‌شوند.</p>
 
           <div className="schema-card" dir="ltr">
             <div><span className="schema-key">presentation.title</span><span>string</span><b>metadata</b></div>
@@ -171,7 +171,7 @@ export function JsonInput({ onBack, onGenerated }: JsonInputProps) {
               aria-describedby="json-help"
             />
           </div>
-          <p id="json-help" className="json-help">کد با جهت چپ‌به‌راست نمایش داده می‌شود؛ رابط همچنان راست‌به‌چپ است.</p>
+          <p id="json-help" className="json-help">JSON و YAML با جهت چپ‌به‌راست نمایش داده می‌شوند؛ رابط همچنان راست‌به‌چپ است.</p>
 
           {status.kind !== 'idle' && (
             <div className={`validation-message ${status.kind}`} role="status">
