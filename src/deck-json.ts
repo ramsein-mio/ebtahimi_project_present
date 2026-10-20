@@ -11,6 +11,7 @@ import type {
 } from '@web-ppt/core';
 import { encodePresentationLineName } from './presentation-interactions';
 import { SUPPORTED_COMPOSITION_SHAPE_TYPES } from './shape-composition-contract';
+import { THEMES, themeVars } from './viewer/themes';
 
 const BASE_WIDTH = 1280;
 const BASE_HEIGHT = 720;
@@ -157,67 +158,134 @@ function configuredThemeColor(value: unknown, fallback: string, theme: Record<st
 
 function dimensionsForDeck(value: ReferenceDeckInput): { width: number; height: number } {
   const metadata = isRecord(value.presentation) ? value.presentation : {};
-  const canvas = isRecord(value.canvas) ? value.canvas : isRecord(metadata.canvas) ? metadata.canvas : {};
-  const width = typeof canvas.width === 'number' && Number.isFinite(canvas.width) && canvas.width > 0
-    ? canvas.width : BASE_WIDTH;
-  const height = typeof canvas.height === 'number' && Number.isFinite(canvas.height) && canvas.height > 0
-    ? canvas.height : null;
-  if (height) return { width, height };
-  const ratio = typeof canvas.aspectRatio === 'string' ? canvas.aspectRatio.match(/^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/) : null;
-  if (ratio) {
-    const aspect = Number(ratio[1]) / Number(ratio[2]);
-    if (Number.isFinite(aspect) && aspect > 0) return { width, height: width / aspect };
+  const rootCanvas = isRecord(value.canvas) ? value.canvas : {};
+  const metadataCanvas = isRecord(metadata.canvas) ? metadata.canvas : {};
+  const canvas = Object.keys(metadataCanvas).length ? metadataCanvas : rootCanvas;
+  const widthValue = typeof canvas.width === 'number' && Number.isFinite(canvas.width) && canvas.width > 0 ? canvas.width : null;
+  const heightValue = typeof canvas.height === 'number' && Number.isFinite(canvas.height) && canvas.height > 0 ? canvas.height : null;
+  const ratioMatch = typeof canvas.aspectRatio === 'string' ? canvas.aspectRatio.match(/^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/) : null;
+  const ratio = ratioMatch ? Number(ratioMatch[1]) / Number(ratioMatch[2]) : null;
+
+  // When the canvas specifies an aspect ratio, it is authoritative. An explicit
+  // width (or, if absent, height) sets the output bound; the other dimension is
+  // derived. Without a ratio, preserve explicitly supplied width and height.
+  if (ratio && Number.isFinite(ratio) && ratio > 0) {
+    const width = widthValue ?? (heightValue ? heightValue * ratio : BASE_WIDTH);
+    const height = widthValue ? width / ratio : (heightValue ?? width / ratio);
+    return { width: Math.max(1, Math.min(8192, Math.round(width))), height: Math.max(1, Math.min(8192, Math.round(height))) };
   }
-  return { width, height: BASE_HEIGHT };
+  return {
+    width: Math.max(1, Math.min(8192, Math.round(widthValue ?? BASE_WIDTH))),
+    height: Math.max(1, Math.min(8192, Math.round(heightValue ?? BASE_HEIGHT))),
+  };
+}
+
+function registeredTheme(id: string): Record<string, unknown> {
+  if (!THEMES.some((theme) => theme.id === id)) return {};
+  const vars = themeVars(id);
+  return {
+    background: vars['--bg'],
+    foreground: vars['--fg'],
+    muted: vars['--muted'],
+    surface: vars['--soft'],
+    border: vars['--soft2'],
+    highlight: vars['--hl-bg'],
+    palette: [vars['--p0'], vars['--p1'], vars['--p2'], vars['--p3'], vars['--p4'], vars['--p5']],
+  };
+}
+
+function inferredDirection(language: unknown): 'rtl' | 'ltr' {
+  const tag = typeof language === 'string' ? language.toLowerCase() : '';
+  return /^(fa|ar|he|ur|ps|sd|ug|yi)(-|$)/.test(tag) ? 'rtl' : 'ltr';
+}
+
+function rgbForColor(value: string): [number, number, number] | null {
+  const match = value.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (!match) return null;
+  const hex = match[1].length === 3 ? match[1].split('').map((part) => part + part).join('') : match[1];
+  return [0,2,4].map((offset) => parseInt(hex.slice(offset, offset + 2),16)) as [number,number,number];
+}
+function luminance(rgb: [number,number,number]): number {
+  const values=rgb.map((component) => component / 255).map((component) => component <= 0.04045 ? component / 12.92 : ((component + 0.055) / 1.055) ** 2.4);
+  return values[0] * 0.2126 + values[1] * 0.7152 + values[2] * 0.0722;
+}
+function ensureContrast(foreground: string, background: string): string {
+  const fg=rgbForColor(foreground), bg=rgbForColor(background);
+  if (!fg || !bg) return foreground;
+  const L1=luminance(fg), L2=luminance(bg);
+  if ((Math.max(L1,L2)+0.05)/(Math.min(L1,L2)+0.05) >= 7) return foreground;
+  const black=[0,0,0] as [number,number,number], white=[255,255,255] as [number,number,number];
+  const lb=luminance(black), lw=luminance(white), lbk=luminance(bg);
+  return (Math.max(lb,lbk)+0.05)/(Math.min(lb,lbk)+0.05) >= (Math.max(lw,lbk)+0.05)/(Math.min(lw,lbk)+0.05) ? '#000000' : '#ffffff';
 }
 
 function resolveSlideTheme(deck: ReferenceDeckInput, source: ReferenceSlideInput): void {
   const metadata = isRecord(deck.presentation) ? deck.presentation : {};
-  const rootTheme = isRecord(deck.theme) ? deck.theme : {};
-  const metadataTheme = {
-    ...(isRecord(metadata.theme) ? metadata.theme : {}),
-    ...(isRecord(metadata.design) ? metadata.design : {}),
-  };
+  const legacyRootTheme = isRecord(deck.theme) ? deck.theme : {};
+  const metadataTheme = isRecord(metadata.theme) ? metadata.theme : {};
+  const design = isRecord(metadata.design) ? metadata.design : {};
   const slideTheme = isRecord(source.theme) ? source.theme : {};
-  const theme: Record<string, unknown> = { ...rootTheme, ...metadataTheme, ...slideTheme };
-  if (Array.isArray(metadata.palette) && !Array.isArray(metadataTheme.palette) && !Array.isArray(slideTheme.palette)) {
-    theme.palette = metadata.palette;
+  const themeId = typeof metadata.theme === 'string' ? metadata.theme : typeof deck.theme === 'string' ? deck.theme : 'light';
+  const baseTheme = registeredTheme(themeId);
+  // Stable precedence: registered theme -> legacy/global hints -> flattened
+  // presentation settings -> presentation.design -> slide.theme.
+  const flatSettings: Record<string, unknown> = {};
+  for (const key of ['direction','fontScale','spacingScale','radiusScale','shadowStyle','contrast','palette','semanticColors','background','foreground','muted','surface','border','highlight','fontFamily']) {
+    if (key in metadata && metadata[key] !== undefined) flatSettings[key] = metadata[key];
   }
+  const theme: Record<string, unknown> = {
+    ...baseTheme,
+    ...legacyRootTheme,
+    ...metadataTheme,
+    ...flatSettings,
+    ...design,
+    ...slideTheme,
+  };
   const semanticColors = {
+    ...(isRecord(legacyRootTheme.semanticColors) ? legacyRootTheme.semanticColors : {}),
     ...(isRecord(metadata.semanticColors) ? metadata.semanticColors : {}),
-    ...(isRecord(rootTheme.semanticColors) ? rootTheme.semanticColors : {}),
     ...(isRecord(metadataTheme.semanticColors) ? metadataTheme.semanticColors : {}),
+    ...(isRecord(design.semanticColors) ? design.semanticColors : {}),
     ...(isRecord(slideTheme.semanticColors) ? slideTheme.semanticColors : {}),
   };
   if (Object.keys(semanticColors).length) theme.semanticColors = semanticColors;
+  const requestedDirection = slideTheme.direction ?? design.direction ?? metadataTheme.direction ?? metadata.direction ?? legacyRootTheme.direction;
+  const language = metadata.locale ?? metadata.language;
+  const direction = requestedDirection === 'ltr' ? 'ltr' : requestedDirection === 'rtl' ? 'rtl' : inferredDirection(language);
   ACTIVE_PRESENTATION_META = {
     ...metadata,
-    direction: slideTheme.direction ?? metadataTheme.direction ?? metadata.direction ?? rootTheme.direction,
-    fontScale: slideTheme.fontScale ?? metadataTheme.fontScale ?? metadata.fontScale ?? rootTheme.fontScale,
-    spacingScale: slideTheme.spacingScale ?? metadataTheme.spacingScale ?? metadata.spacingScale ?? rootTheme.spacingScale,
+    direction,
+    locale: typeof metadata.locale === 'string' ? metadata.locale : typeof metadata.language === 'string' ? metadata.language : undefined,
+    fontScale: slideTheme.fontScale ?? design.fontScale ?? metadataTheme.fontScale ?? metadata.fontScale ?? legacyRootTheme.fontScale,
+    spacingScale: slideTheme.spacingScale ?? design.spacingScale ?? metadataTheme.spacingScale ?? metadata.spacingScale ?? legacyRootTheme.spacingScale,
+    radiusScale: slideTheme.radiusScale ?? design.radiusScale ?? metadataTheme.radiusScale ?? metadata.radiusScale ?? legacyRootTheme.radiusScale,
+    shadowStyle: slideTheme.shadowStyle ?? design.shadowStyle ?? metadataTheme.shadowStyle ?? metadata.shadowStyle ?? legacyRootTheme.shadowStyle ?? 'none',
+    contrast: slideTheme.contrast ?? design.contrast ?? metadataTheme.contrast ?? metadata.contrast ?? legacyRootTheme.contrast ?? 'normal',
   };
   const rootCanvas = isRecord(deck.canvas) ? deck.canvas : {};
   const metadataCanvas = isRecord(metadata.canvas) ? metadata.canvas : {};
   const visual = isRecord(source.visual) ? source.visual : {};
   const data = isRecord(visual.data) ? visual.data : {};
-  const canvas = isRecord(data.canvas) ? data.canvas : {};
-  const slideBackground = isRecord(source.background) ? source.background.color : source.background;
-  const background = configuredThemeColor(
-    slideBackground ?? canvas.background ?? metadata.background ?? metadataCanvas.background ?? rootCanvas.background ?? theme.background,
-    DEFAULT_COLORS.background,
-    theme,
-  );
-  const palette = Array.isArray(theme.palette)
-    ? theme.palette.map((color) => colorString(color, '')).filter(Boolean)
-    : [];
+  const visualCanvas = isRecord(data.canvas) ? data.canvas : {};
+  const palette = Array.isArray(theme.palette) ? theme.palette.map((color) => colorString(color, '')).filter(Boolean) : [];
   const fonts = Array.isArray(theme.fontFamily)
     ? theme.fontFamily.filter((font): font is string => typeof font === 'string' && font.trim().length > 0)
     : typeof theme.fontFamily === 'string' && theme.fontFamily.trim()
       ? [theme.fontFamily, 'Tahoma', 'Arial']
       : null;
+  const slideBg = isRecord(source.background) ? source.background.color : source.background;
+  const background = configuredThemeColor(
+    slideBg ?? visualCanvas.background ?? metadataCanvas.background ?? rootCanvas.background ?? metadata.background ?? theme.background,
+    DEFAULT_COLORS.background,
+    theme,
+  );
+  const foregroundCandidate = configuredThemeColor(theme.foreground ?? theme.text, DEFAULT_COLORS.foreground, theme);
+  const foreground = ACTIVE_PRESENTATION_META.contrast === 'high'
+    ? ensureContrast(foregroundCandidate, background)
+    : foregroundCandidate;
   COLORS = {
     background,
-    foreground: configuredThemeColor(theme.foreground ?? theme.text, DEFAULT_COLORS.foreground, theme),
+    foreground,
     muted: configuredThemeColor(theme.muted, DEFAULT_COLORS.muted, theme),
     soft: configuredThemeColor(theme.surface ?? theme.soft, DEFAULT_COLORS.soft, theme),
     soft2: configuredThemeColor(theme.border ?? theme.soft2, DEFAULT_COLORS.soft2, theme),
