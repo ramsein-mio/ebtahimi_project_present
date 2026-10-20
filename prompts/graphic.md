@@ -7,6 +7,7 @@ Create a colorful, polished, visually expressive presentation—not a lesson scr
 
 ## Shared contract is mandatory
 - Use exactly the canonical root keys: `presentation`, `slides`, `recapSlides`. Never add a `mode` key.
+- Choose a registered `presentation.theme` ID where possible (`light`, `dark`, `ocean`, `forest`, `sunset`, `lavender`, `rose`, `sepia`, `midnight`, `neon`). Treat it as the base theme; use `presentation.design` for shared overrides and `slide.theme` for local overrides.
 - Use exactly the required metadata, slide, body, visual, and recap fields from `shared-json-contract.md`. Do not add arbitrary fields.
 - Select only validator-supported layouts: `title`, `content`, `visual-right`, `image-led-right`, `asymmetric-editorial`, `graphic-fullscreen`, `full-bleed`, `shape-composition`.
 - Select only supported visual types: `none`, `icon-list`, `bar-chart`, `line-chart`, `pie-chart`, `comparison-grid`, `table`, `shape-composition`.
@@ -14,8 +15,8 @@ Create a colorful, polished, visually expressive presentation—not a lesson scr
 - Do not use unsupported shape types such as `image`, `group`, or `custom`. The current shape types are `rectangle`, `rounded-rectangle`, `pill`, `circle`, `ellipse`, `ring`, `triangle`, `diamond`, `line`, `connector`, `arrow`, `polygon`, `text`, `bracket`, and `arc`.
 - Shape `style` may contain only the keys documented in the shared contract. Do not emit `shadow`, `gradient`, `blendMode`, `lineHeight`, or undocumented style/content properties.
 - To avoid validator incompatibilities, omit `fontWeight` unless necessary; when used, use only `"normal"`, `"bold"`, or a JSON number such as `700` (not the string `"700"`). Use `textAlign` values `left`, `center`, or `right`; `verticalAlign` values `top`, `middle`, or `bottom`.
-- Every element must have a unique `id`, supported `type`, finite normalized `x` and `y` in [0,1], and valid dimensions. Area shapes require positive `w` and `h`. Only `line`, `connector`, and `arrow` may use zero or signed `w`/`h`. Keep visible content within the canvas.
-- Text shapes use `content.text` and supported style fields such as `color`, `fontSize`, and `textAlign`. Use only `fill`, `stroke`, `strokeWidth`, `fontSize`, `color`, `textAlign`, `fontWeight`, `opacity`, `verticalAlign`, `radius`, `lineDash`, `dash`, `endArrow`, and `fontScale` in `style`.
+- Every element must have a unique `id`, supported `type`, finite normalized `x` and `y` in [0,1], and valid dimensions. Area shapes require positive dimensions no larger than the normalized canvas; `line`, `connector`, and `arrow` may use signed dimensions but cannot have both dimensions equal to zero. Keep visible content within the canvas.
+- Text shapes use `content.text` and supported style fields such as `color`, `fontSize`, and `textAlign`. `fontSize` is CSS pixels (6–512); use `fontScale` as a separate multiplier (0.25–4), never a fractional normalized canvas height as font size. `strokeWidth: 0` explicitly removes a shape outline. Use only `fill`, `stroke`, `strokeWidth`, `fontSize`, `color`, `textAlign`, `fontWeight`, `opacity`, `verticalAlign`, `radius`, `lineDash`, `dash`, `endArrow`, and `fontScale` in `style`.
 - Do not claim unsupported effects or assets. Do not create image URLs. Use a supported visual or `none` when an actual asset/data source is unavailable.
 
 ## Theme and optional settings
