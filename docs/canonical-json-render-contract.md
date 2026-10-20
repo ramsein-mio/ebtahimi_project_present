@@ -14,6 +14,7 @@ Within `presentation` (or `presentation.design` where applicable):
 - `fontScale`, `spacingScale`, `radiusScale`: bounded positive scale factors; omitted/null values use renderer defaults.
 - `shadowStyle`, `contrast`, `palette`, `semanticColors`: optional design-system hints; `contrast` is `normal` or `high`.
 - `canvas`: optional `width`, `height`, `aspectRatio` (`W:H`), `background`, `fullscreen`, `mode`, and `safeArea` insets (`top`, `right`, `bottom`, `left`). Dimensions are integers from 1 to 8192.
+  Safe-area insets are non-negative pixel values in the specified canvas coordinate system; horizontal edges are bounded to 25% of canvas width and vertical edges to 25% of canvas height, then scaled to the fitted viewport.
 - `design`: optional shared theme object with `background`, `foreground`, `muted`, `surface`, `border`, `highlight`, `palette`, `fontFamily`, and a bounded `fontSize` default for shape-composition text.
 - `assets` is retained as opaque metadata; the current renderer does not dereference or draw assets from this array.
 
