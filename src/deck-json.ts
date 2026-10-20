@@ -941,7 +941,8 @@ function renderBarChart(
 
   const captionSpace = visualCaption(visual.caption, elements, frame);
   const legendHeight = series.length > 1 ? 30 : 8;
-  const area = { x: frame.x + 20, y: frame.y + 16 + legendHeight, w: frame.w - 40, h: Math.max(60, frame.h - 34 - legendHeight - captionSpace) };
+  const axisTitleHeight = (typeof data.yAxisLabel === 'string' && data.yAxisLabel || typeof data.xAxisLabel === 'string' && data.xAxisLabel) ? 20 : 0;
+  const area = { x: frame.x + 20, y: frame.y + 16 + legendHeight + axisTitleHeight, w: frame.w - 40, h: Math.max(60, frame.h - 34 - legendHeight - captionSpace - axisTitleHeight) };
   const flatValues = series.flatMap((item) => Array.isArray(item.values) ? item.values.filter(isRecord).map((v) => Number(v.value)).filter(Number.isFinite) : []);
   let min = Math.min(0, ...flatValues);
   let max = Math.max(0, ...flatValues);
@@ -954,6 +955,7 @@ function renderBarChart(
   const zeroX = plotX + ((0 - min) / span) * plotW;
   const groupH = area.h / categories.length;
   const unit = typeof data.unit === 'string' ? data.unit : '';
+  if (data.yAxisLabel) elements.push(textBox(area.x, frame.y + 12 + legendHeight, area.w, 18, data.yAxisLabel, 10, COLORS.muted, 'right'));
   if (series.length > 1) {
     series.forEach((item, index) => {
       const label = typeof item.name === 'string' && item.name.trim() ? item.name : `Series ${index + 1}`;
@@ -989,6 +991,7 @@ function renderBarChart(
   });
   // Draw a visible zero baseline even when all values share one sign.
   elements.push(rectangle(zeroX - .5, area.y, 1, area.h, COLORS.soft2, 0));
+  if (data.xAxisLabel) elements.push(textBox(plotX, area.y + area.h - 16, plotW, 16, data.xAxisLabel, 10, COLORS.muted, 'center'));
 }
 
 function renderLineChart(
