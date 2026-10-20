@@ -156,7 +156,8 @@ function normalizeCanvas(value: unknown): unknown {
 
 function normalizeVisual(value: unknown): RecordValue {
   if (typeof value === 'string') return { type: 'custom', data: { value }, caption: null };
-  if (!isRecord(value)) return { type: 'none', data: {}, caption: null };
+  if (value == null) return { type: 'none', data: {}, caption: null };
+  if (!isRecord(value)) return { type: 'custom', data: { value }, caption: null };
   const type = textValue(value.type, 'custom').trim() || 'custom';
   const rawData = value.data;
   const data = isRecord(rawData) ? rawData : rawData == null ? {} : { value: rawData };
@@ -171,7 +172,7 @@ function normalizeVisual(value: unknown): RecordValue {
 
 function normalizeSlide(value: unknown, index: number): RecordValue {
   const source = isRecord(value) ? value : { body: { lead: textValue(value) } };
-  const bodySource = isRecord(source.body) ? source.body : {};
+  const bodySource = isRecord(source.body) ? source.body : source.body == null ? {} : { lead: textValue(source.body) };
   const rawBullets = bodySource.bullets;
   const bullets = Array.isArray(rawBullets)
     ? rawBullets.map(richLine)
@@ -248,9 +249,47 @@ function normalizeRoadmap(value: unknown): RecordValue[] {
  * fields for downstream rendering. Native web-ppt documents are left untouched.
  */
 export function normalizeFlexiblePresentation(value: unknown): unknown {
-  if (!isRecord(value) || !Array.isArray(value.slides)) return value;
-  if ((value.source === 'ppt' || value.source === 'pptx') && 'width' in value && 'height' in value) return value;
-  const rawSlides = value.slides.map((slide, index) => normalizeSlide(slide, index));
+  if (isRecord(value) && (value.source === 'ppt' || value.source === 'pptx')
+      && 'width' in value && 'height' in value && Array.isArray(value.slides)
+      && value.slides.some((slide) => isRecord(slide) && Array.isArray(slide.elements))) return value;
+
+  // Accept any valid JSON/YAML root. If it is not already a deck, wrap it into
+  // one slide (or one slide per array item) so information remains viewable.
+  if (!isRecord(value)) {
+    const entries = Array.isArray(value) ? value : [value];
+    return normalizeFlexiblePresentation({
+      presentation: { title: Array.isArray(value) ? 'داده‌های ورودی' : 'محتوای ورودی', language: 'fa', theme: 'modern' },
+      slides: entries.map((entry, index) => isRecord(entry)
+        && ('title' in entry || 'heading' in entry || 'body' in entry || 'content' in entry || 'visual' in entry)
+        ? entry
+        : { title: `مورد ${index + 1}`, body: { lead: textValue(entry) } }),
+      recapSlides: [],
+    });
+  }
+  if (!Array.isArray(value.slides)) {
+    const rawMeta = isRecord(value.presentation) ? value.presentation : {};
+    const items = Array.isArray(value.items) ? value.items
+      : Array.isArray(value.sections) ? value.sections
+      : Array.isArray(value.data) ? value.data
+      : [value];
+    const slides = items.map((entry, index) => {
+      if (isRecord(entry) && ('title' in entry || 'heading' in entry || 'body' in entry || 'content' in entry || 'visual' in entry)) return entry;
+      return { title: `مورد ${index + 1}`, body: { lead: textValue(entry) } };
+    });
+    value = {
+      ...value,
+      presentation: {
+        ...rawMeta,
+        title: rawMeta.title ?? value.title ?? 'محتوای ورودی',
+        language: rawMeta.language ?? value.language ?? 'fa',
+        theme: rawMeta.theme ?? value.theme ?? 'modern',
+      },
+      slides,
+      recapSlides: Array.isArray(value.recapSlides) ? value.recapSlides : [],
+    };
+  }
+  const deck = value as RecordValue & { slides: unknown[] };
+  const rawSlides = deck.slides.map((slide, index) => normalizeSlide(slide, index));
   const ids = new Set<string>();
   rawSlides.forEach((slide, index) => {
     let id = textValue(slide.id, `slide-${index + 1}`);
