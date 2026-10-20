@@ -200,7 +200,7 @@ function normalizeSlide(value: unknown, index: number): RecordValue {
     ...(source.layoutConfig != null ? { layoutConfig: isRecord(source.layoutConfig) ? source.layoutConfig : { value: source.layoutConfig } } : {}),
     body: {
         ...bodySource,
-      lead: richLine(bodySource.lead ?? source.content ?? source.text),
+      lead: richLine(bodySource.lead ?? source.content ?? source.text ?? source.description ?? source.summary ?? (source.data != null ? textValue(source.data) : '')),
       bullets,
       emphasis,
     },
@@ -301,7 +301,7 @@ export function normalizeFlexiblePresentation(value: unknown): unknown {
   const total = rawSlides.reduce((sum, slide) => sum + safeNumber(slide.durationSeconds, 45, 0.001), 0);
   const metadata: RecordValue = {
     ...rawMeta,
-    ...(rawMeta.design != null ? { design: normalizeTheme(rawMeta.design) } : {}),
+    ...(rawMeta.design != null ? { design: normalizeTheme(rawMeta.design) } : isRecord(rawMeta.theme) ? { design: normalizeTheme(rawMeta.theme) } : {}),
     ...(rawMeta.canvas != null ? { canvas: normalizeCanvas(rawMeta.canvas) } : {}),
     ...(rawMeta.background != null && typeof rawMeta.background !== 'string' ? { background: isRecord(rawMeta.background) && typeof rawMeta.background.color === 'string' ? rawMeta.background.color : '#ffffff' } : {}),
     ...(rawMeta.direction != null && !['ltr','rtl','auto'].includes(String(rawMeta.direction)) ? { direction: 'auto' } : {}),
@@ -318,7 +318,7 @@ export function normalizeFlexiblePresentation(value: unknown): unknown {
     title: textValue(rawMeta.title ?? value.title, 'ارائه') || 'ارائه',
     subtitle: rawMeta.subtitle == null || rawMeta.subtitle === '' ? null : textValue(rawMeta.subtitle),
     language: textValue(rawMeta.language, 'fa'),
-    theme: textValue(rawMeta.theme, 'modern'),
+    theme: textValue(isRecord(rawMeta.theme) ? rawMeta.theme.name ?? rawMeta.theme.id : rawMeta.theme, 'modern'),
     targetAudience: textValue(rawMeta.targetAudience, 'مخاطبان عمومی'),
     estimatedTotalDurationSeconds: safeNumber(rawMeta.estimatedTotalDurationSeconds, Math.max(1, total), 1),
     learningObjectives: Array.isArray(rawMeta.learningObjectives) ? rawMeta.learningObjectives.map((item) => textValue(item)) : [],
