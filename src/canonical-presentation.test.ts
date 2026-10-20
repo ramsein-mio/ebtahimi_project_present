@@ -149,13 +149,13 @@ describe('canonical presentation contract', () => {
     expect(result.errors.some((issue) => issue.path.endsWith('elements[0].type'))).toBe(true);
   });
 
-  it('rejects visual types that have no registered schema and renderer', () => {
+  it('warns on unknown visuals so unrelated slide content remains usable', () => {
     const result = validateCanonicalPresentation({
       ...valid,
       slides: [{ ...slide, visual: { type: 'timeline', data: {}, caption: null } }],
     });
-    expect(result.valid).toBe(false);
-    expect(result.errors.some((issue) => issue.path === 'slides[0].visual.type')).toBe(true);
+    expect(result.valid).toBe(true);
+    expect(result.warnings.some((issue) => issue.path === 'slides[0].visual.type')).toBe(true);
   });
 
   it('rejects undeclared shape-composition data fields', () => {
@@ -299,6 +299,59 @@ describe('canonical presentation contract', () => {
       slides: [{ ...slide, layoutConfig: { gap: 20, typoPadding: 50 } }],
     });
     expect(result.errors.some((issue) => issue.path === 'slides[0].layoutConfig.typoPadding')).toBe(true);
+  });
+
+
+  it('accepts theme font sizes as absolute values while bounding scale factors', () => {
+    const accepted = validateCanonicalPresentation({
+      ...valid,
+      presentation: {
+        ...valid.presentation,
+        design: { fontSize: 42, fontScale: 1.25, palette: ['#123456', 'hsl(25 80% 50%)'] },
+      },
+    });
+    expect(accepted.valid).toBe(true);
+
+    const rejected = validateCanonicalPresentation({
+      ...valid,
+      presentation: {
+        ...valid.presentation,
+        design: { fontSize: 900, fontScale: 99 },
+      },
+    });
+    expect(rejected.errors.some((issue) => issue.path === 'presentation.design.fontSize')).toBe(true);
+    expect(rejected.errors.some((issue) => issue.path === 'presentation.design.fontScale')).toBe(true);
+  });
+
+  it('preserves asset metadata without assuming a renderer-specific asset schema', () => {
+    const result = validateCanonicalPresentation({
+      ...valid,
+      presentation: {
+        ...valid.presentation,
+        assets: [{ kind: 'illustration', sourceId: 'asset-1', metadata: { license: 'internal' } }],
+      },
+    });
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects non-finite-scale chart values and excessive shape counts', () => {
+    const chart = validateCanonicalPresentation({
+      ...valid,
+      slides: [{
+        ...slide,
+        visual: { type: 'pie-chart', caption: null, data: { slices: [{ label: 'A', value: 1e100 }] } },
+      }],
+    });
+    expect(chart.errors.some((issue) => issue.path === 'slides[0].visual.data.slices[0].value')).toBe(true);
+
+    const shapes = Array.from({ length: 501 }, (_, index) => ({
+      id: 'shape-' + index, type: 'rectangle', x: 0.1, y: 0.1, w: 0.1, h: 0.1,
+    }));
+    const composition = validateCanonicalPresentation({
+      ...valid,
+      slides: [{ ...slide, visual: { type: 'shape-composition', caption: null, data: { version: 1, elements: shapes } } }],
+    });
+    expect(composition.errors.some((issue) => issue.path === 'slides[0].visual.data.elements')).toBe(true);
   });
 
 });
