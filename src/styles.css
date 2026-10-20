@@ -1946,3 +1946,36 @@ button.resize-handle { pointer-events: auto; cursor: nwse-resize; }
     padding: 13px 12px;
   }
 }
+
+
+/* Input format switch for JSON/YAML import. */
+.format-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--line, #e6e0ed);
+  border-radius: 10px;
+  background: #f6f3fa;
+}
+.format-switch .format-tab {
+  min-width: 46px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 7px;
+  color: #6b6178;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.format-switch .format-tab.active {
+  color: #342348;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(38, 23, 58, .12);
+}
+.format-switch .format-tab:focus-visible {
+  outline: 2px solid #8561c5;
+  outline-offset: 2px;
+}
