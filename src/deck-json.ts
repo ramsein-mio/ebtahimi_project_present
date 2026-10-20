@@ -973,12 +973,19 @@ function renderBarChart(
     return;
   }
 
-  const legendHeight = 26;
-  const area = { x: frame.x + 24, y: frame.y + legendHeight + 14, w: frame.w - 48, h: frame.h - legendHeight - 36 - captionSpace };
+  const legendColumns = Math.min(3, alignedSeries.length);
+  const legendRows = Math.ceil(alignedSeries.length / legendColumns);
+  const legendRowHeight = 21;
+  const legendHeight = legendRows * legendRowHeight + 8;
+  const area = { x: frame.x + 24, y: frame.y + legendHeight + 8, w: frame.w - 48, h: frame.h - legendHeight - 30 - captionSpace };
+  const legendColumnWidth = frame.w / legendColumns;
   alignedSeries.forEach((item, index) => {
-    const x = frame.x + frame.w - 18 - index * 150;
-    elements.push(rectangle(x - 12, frame.y + 15, 9, 9, item.color || COLORS.palette[index % COLORS.palette.length], 4));
-    elements.push(textBox(x - 138, frame.y + 7, 120, 24, item.name || ('Series ' + (index + 1)), 10, COLORS.foreground, 'right'));
+    const row = Math.floor(index / legendColumns);
+    const column = index % legendColumns;
+    const right = frame.x + frame.w - column * legendColumnWidth - 8;
+    const y = frame.y + 7 + row * legendRowHeight;
+    elements.push(rectangle(right - 9, y + 6, 7, 7, item.color || COLORS.palette[index % COLORS.palette.length], 3));
+    elements.push(textBox(right - legendColumnWidth + 3, y, Math.max(10, legendColumnWidth - 24), 20, item.name || ('Series ' + (index + 1)), 9, COLORS.foreground, 'right'));
   });
   const rowHeight = area.h / labels.length;
   const labelHeight = Math.min(22, Math.max(14, rowHeight * .28));
@@ -996,7 +1003,8 @@ function renderBarChart(
       elements.push(textBox(area.x, y - 4, 46, 16, formatChartValue(value, percent ? 'percent' : undefined, percent ? '%' : data.unit), 9, COLORS.foreground, 'left'));
       elements.push(rectangle(trackX, y, trackW, Math.min(8, subRowHeight), COLORS.soft, 4));
       const fillW = Math.max(0, trackW * Math.max(0, value) / max);
-      if (fillW > 0) elements.push(rectangle(trackX + trackW - fillW, y, fillW, Math.min(8, subRowHeight), item.color || COLORS.palette[seriesIndex % COLORS.palette.length], 4, null, 'bar-' + (categoryIndex + 1) + '-' + (seriesIndex + 1)));
+      const pointColor = colorString(item.values[categoryIndex].color, item.color || COLORS.palette[seriesIndex % COLORS.palette.length]);
+      if (fillW > 0) elements.push(rectangle(trackX + trackW - fillW, y, fillW, Math.min(8, subRowHeight), pointColor, 4, null, 'bar-' + (categoryIndex + 1) + '-' + (seriesIndex + 1)));
     });
   });
 }
