@@ -1023,10 +1023,21 @@ function renderLineChart(
 ): void {
   const data = isRecord(visual.data) ? visual.data : {};
   const series = Array.isArray(data.series) ? data.series.filter(isRecord) : [];
-  const parsed = series.map((item) => ({
+  const rawParsed = series.map((item) => ({
     name: stringValue(item.name),
     color: typeof item.color === 'string' ? resolveDesignToken(item.color, '') : '',
-    points: Array.isArray(item.points) ? item.points.filter(isRecord) : [],
+    points: Array.isArray(item.points) ? item.points.filter((point): point is Record<string, unknown> => isRecord(point)
+      && (typeof point.x === 'number' && Number.isFinite(point.x) || typeof point.x === 'string' && point.x.trim().length > 0)
+      && typeof point.y === 'number' && Number.isFinite(point.y)) : [],
+  })).filter((item) => item.points.length > 0);
+  if (!rawParsed.length) return;
+  // Legacy JSON can bypass canonical validation; discard invalid coordinates.
+  const numericAxis = typeof rawParsed[0].points[0].x === 'number';
+  const parsed = rawParsed.map((item) => ({
+    ...item,
+    points: item.points.filter((point) => numericAxis
+      ? typeof point.x === 'number' && Number.isFinite(point.x)
+      : typeof point.x === 'string' && point.x.trim().length > 0),
   })).filter((item) => item.points.length > 0);
   if (!parsed.length) return;
 
@@ -1044,7 +1055,7 @@ function renderLineChart(
   let maxValue = Math.max(0, ...allValues);
   if (minValue === maxValue) { minValue -= 0.5; maxValue += 0.5; }
   const valueSpan = maxValue - minValue;
-  const numericX = parsed.every((item) => item.points.every((point) => typeof point.x === 'number' && Number.isFinite(point.x)));
+  const numericX = numericAxis;
   const allX = numericX ? parsed.flatMap((item) => item.points.map((point) => Number(point.x))) : [];
   const minX = allX.length ? Math.min(...allX) : 0;
   const maxX = allX.length ? Math.max(...allX) : 1;
@@ -1124,7 +1135,12 @@ function renderPieChart(
   frame: { x: number; y: number; w: number; h: number },
 ): void {
   const data = isRecord(visual.data) ? visual.data : {};
-  const slices = Array.isArray(data.slices) ? data.slices.filter(isRecord) : [];
+  const rawSlices = Array.isArray(data.slices) ? data.slices : [];
+  if (!rawSlices.length || rawSlices.some((slice) => !isRecord(slice)
+    || typeof slice.label !== 'string' || !slice.label.trim()
+    || typeof slice.value !== 'number' || !Number.isFinite(slice.value) || slice.value < 0
+    || ('color' in slice && typeof slice.color !== 'string'))) return;
+  const slices = rawSlices as Record<string, unknown>[];
   if (!slices.length) return;
   const captionSpace = visualCaption(visual.caption, elements, frame);
   const contentH = frame.h - captionSpace;
@@ -1357,7 +1373,8 @@ function renderShapeComposition(
     const fontSize = Math.max(6, Math.min(512, rawFontSize * scale));
     const text = isText ? textBody(rawText, fontSize,
       applyElementOpacity(resolveDesignToken(style.color, COLORS.foreground), opacity),
-      style.textAlign === 'left' || style.textAlign === 'center' ? style.textAlign : 'right',
+      style.textAlign === 'left' || style.textAlign === 'center' || style.textAlign === 'right'
+        ? style.textAlign : isRtlLayout() ? 'right' : 'left',
       style.fontWeight === 'bold' || (typeof style.fontWeight === 'number' && style.fontWeight >= 600),
       style.verticalAlign === 'top' ? 'top' : style.verticalAlign === 'bottom' ? 'bottom' : 'middle') : null;
     const shapeElement = shape(x, y, w, h, type === 'text' ? null : path, type === 'text' ? null : shapeFill, stroke, text, typeof item.id === 'string' ? item.id : `composition-element-${index}`);
