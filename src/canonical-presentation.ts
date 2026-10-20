@@ -15,8 +15,8 @@ export interface RenderTheme {
   background?: string; foreground?: string; muted?: string; surface?: string;
   border?: string; highlight?: string; palette?: string[];
   fontFamily?: string | string[];
-  fontSize?: number;
   fontScale?: number;
+  spacingScale?: number;
   radiusScale?: number;
   shadowStyle?: 'none' | 'soft' | 'medium' | 'strong';
   direction?: 'ltr' | 'rtl' | 'auto';
@@ -401,6 +401,7 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
       else if (typeof visual.type === 'string' && isSupportedVisualType(visual.type)) validateVisualData(visual.type, visual.data, p + '.visual.data', errors);
       expectNullableString(visual.caption, p + '.visual.caption', errors);
       if ((slide.layout === 'graphic-fullscreen' || slide.layout === 'full-bleed' || slide.layout === 'shape-composition') && visual.type !== 'shape-composition') issue(errors, p + '.visual.type', 'Fullscreen layouts require shape-composition so the chosen layout is actually rendered full-bleed.', 'shape-composition', visual.type);
+      if (isRecord(slide.layoutConfig) && slide.layoutConfig.fullscreen === true && visual.type !== 'shape-composition') issue(errors, p + '.layoutConfig.fullscreen', 'Fullscreen layoutConfig is supported only for shape-composition visuals.', 'visual.type = shape-composition', slide.layoutConfig.fullscreen);
       if (visual.type === 'shape-composition' && isRecord(visual.data)) {
         exactKeys(visual.data, ['version', 'canvas', 'elements'], p + '.visual.data', errors, ['canvas']);
         if (visual.data.version !== 1) errors.push({ path: p + '.visual.data.version', message: 'Unsupported shape composition version.', expected: '1', actual: String(visual.data.version), severity: 'error' });
