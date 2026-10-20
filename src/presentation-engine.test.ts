@@ -103,18 +103,11 @@ describe('چرخهٔ JSON تا ذخیره و بازگشایی', () => {
     disposeDoc(second.doc);
   });
 
-  it('ورودی‌های خالی و دلخواه را به‌درستی مدیریت می‌کند', () => {
-    const emptyDeck = validatePresentationJson('{"slides":[]}');
-    expect(emptyDeck.presentation).toBeNull();
-    expect(emptyDeck.error).toContain('slides');
-
-    const arbitraryObject = validatePresentationJson('{}');
-    expect(arbitraryObject.error).toBeNull();
-    expect(arbitraryObject.presentation?.slides).toHaveLength(1);
-
-    const arbitraryArray = validatePresentationJson(JSON.stringify(['یک داده', { title: 'دادهٔ دوم', data: { score: 12 } }]));
-    expect(arbitraryArray.error).toBeNull();
-    expect(arbitraryArray.presentation?.slides).toHaveLength(2);
+  it('ورودی ناسازگار را با پیام فارسی رد می‌کند', () => {
+    const result = validatePresentationJson('{"slides":[]}');
+    expect(result.presentation).toBeNull();
+    expect(result.error).toContain('slides');
+    expect(validatePresentationJson('{}').error).toContain('slides');
   });
 
   it('شکل افزوده‌شده را جابه‌جا می‌کند، متن می‌دهد و در projection نگه می‌دارد', () => {
@@ -203,7 +196,7 @@ describe('چرخهٔ JSON تا ذخیره و بازگشایی', () => {
     expect(result.presentation?.slides[0].elements.some((element) => element.name === 'line-a')).toBe(true);
   });
 
-  it('ورودی‌های JSON را به‌صورت منعطف نرمال می‌کند و فیلدهای افزوده را رد نمی‌کند', () => {
+  it('JSON استاندارد را در مرز ورودی سخت‌گیرانه اعتبارسنجی می‌کند', () => {
     const base = {
       presentation: {
         title: 'آزمایش استاندارد', subtitle: null, language: 'fa', theme: 'modern',
@@ -231,19 +224,19 @@ describe('چرخهٔ JSON تا ذخیره و بازگشایی', () => {
       slides: base.slides,
     };
     const missingRecapResult = validatePresentationJson(JSON.stringify(missingRecap));
-    expect(missingRecapResult.error).toBeNull();
-    expect(missingRecapResult.presentation?.slides).toHaveLength(1);
+    expect(missingRecapResult.presentation).toBeNull();
+    expect(missingRecapResult.error).toContain('recapSlides');
 
     const extraRootKey = validatePresentationJson(JSON.stringify({ ...base, mode: 'teaching' }));
-    expect(extraRootKey.error).toBeNull();
-    expect(extraRootKey.presentation?.slides).toHaveLength(1);
+    expect(extraRootKey.presentation).toBeNull();
+    expect(extraRootKey.error).toContain('mode');
 
     const extraMetadataKey = validatePresentationJson(JSON.stringify({
       ...base,
       presentation: { ...base.presentation, extraMetadata: true },
     }));
-    expect(extraMetadataKey.error).toBeNull();
-    expect(extraMetadataKey.presentation?.slides).toHaveLength(1);
+    expect(extraMetadataKey.presentation).toBeNull();
+    expect(extraMetadataKey.error).toContain('extraMetadata');
   });
   it('returns a warning when a canonical layout falls back to standard content', () => {
     const result = validatePresentationJson(JSON.stringify({

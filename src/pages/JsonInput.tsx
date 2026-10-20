@@ -114,14 +114,14 @@ export function JsonInput({ onBack, onGenerated }: JsonInputProps) {
         <div className="json-intro">
           <div className="step-badge">مرحلهٔ ۱ از ۲</div>
           <h1>داده را به اسلاید تبدیل کنید.</h1>
-          <p>ساختار ارائه را به‌صورت JSON یا YAML وارد کنید. ورودی‌های استاندارد و داده‌های سفارشی پذیرفته می‌شوند؛ فیلدهای اضافی تا حد امکان حفظ می‌شوند و visualهای ناشناخته با رندر عمومی نمایش داده می‌شوند.</p>
+          <p>ساختار ارائه را به‌صورت JSON یا YAML با قرارداد <bdi dir="ltr">presentation + slides</bdi> وارد کنید. ترتیب، متن‌های نشانه‌گذاری‌شده و visualها دقیقاً به اسلایدهای قابل‌ویرایش تبدیل می‌شوند.</p>
 
           <div className="schema-card" dir="ltr">
             <div><span className="schema-key">presentation.title</span><span>string</span><b>metadata</b></div>
             <div><span className="schema-key">slides</span><span>Slide[]</span><b>required</b></div>
             <div><span className="schema-key">slide.order</span><span>number</span><b>sorting</b></div>
             <div><span className="schema-key">slide.body</span><span>lead | bullets | emphasis</span><b>content</b></div>
-            <div><span className="schema-key">slide.visual</span><span>built-in + custom fallback</span><b>flexible</b></div>
+            <div><span className="schema-key">slide.visual</span><span>5 supported types</span><b>optional</b></div>
           </div>
 
           <div className="privacy-note">

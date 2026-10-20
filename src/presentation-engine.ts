@@ -1,4 +1,3 @@
-import { normalizeFlexiblePresentation } from './flexible-presentation';
 import { renderSlideToSvg, type Presentation, type SlideElement, type TableElement, type TextBody } from '@web-ppt/core';
 import {
   createDoc,
@@ -15,7 +14,7 @@ import {
 } from '@web-ppt/edit-core';
 import { tableCellBody } from './editor/table-model';
 import { convertReferenceDeck, isReferenceDeck } from './deck-json';
-import { validateCanonicalPresentation } from './canonical-presentation';
+import { parseCanonicalPresentation } from './canonical-presentation';
 import type { ValidationResult } from './types';
 
 export interface TextElementInfo {
@@ -71,7 +70,7 @@ function removeEmptyVisualPlaceholders(presentation: Presentation): Presentation
 export function validatePresentationJson(source: string): ValidationResult {
   let value: unknown;
   try {
-    value = normalizeFlexiblePresentation(JSON.parse(source) as unknown);
+    value = JSON.parse(source);
   } catch (error) {
     return { presentation: null, error: persianError(error) };
   }
@@ -96,7 +95,7 @@ export function validatePresentationJson(source: string): ValidationResult {
     // reaches the legacy-compatible renderer. Non-canonical/native inputs keep
     // their existing import path unchanged.
     if (canonical) {
-      const validation = validateCanonicalPresentation(value, { allowUnknownKeys: true });
+      const validation = parseCanonicalPresentation(source);
       warnings = validation.warnings.map((issue) => `${issue.path}: ${issue.message}`);
       if (!validation.valid) {
         const issues = validation.errors.slice(0, 8).map((issue) => `${issue.path}: ${issue.message}`);

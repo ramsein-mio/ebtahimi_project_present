@@ -76,10 +76,9 @@ const VISUAL_KEYS = ['type','data','caption'];
 const META_KEYS = ['title','subtitle','language','theme','design','canvas','background','targetAudience','estimatedTotalDurationSeconds','learningObjectives','coverageChecklist','teachingRoadmap','direction','locale','fontScale','spacingScale','radiusScale','shadowStyle','contrast','palette','semanticColors','assets','layoutDefaults'];
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const actualType = (v: unknown): string => v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v;
-let allowUnknownKeysInValidation = false;
 function exactKeys(value: Record<string, unknown>, expected: string[], path: string, errors: ValidationIssue[], optional: string[] = []) {
   for (const key of expected) if (!optional.includes(key) && !(key in value)) errors.push({ path: path ? path + '.' + key : key, message: 'Required field is missing.', expected: 'present', actual: 'missing', severity: 'error' });
-  if (!allowUnknownKeysInValidation) for (const key of Object.keys(value)) if (!expected.includes(key)) errors.push({ path: path ? path + '.' + key : key, message: 'Unexpected field in canonical object.', expected: 'one of the canonical fields', actual: 'unexpected key', severity: 'error' });
+  for (const key of Object.keys(value)) if (!expected.includes(key)) errors.push({ path: path ? path + '.' + key : key, message: 'Unexpected field in canonical object.', expected: 'one of the canonical fields', actual: 'unexpected key', severity: 'error' });
 }
 function validateRenderTheme(value: unknown, path: string, errors: ValidationIssue[]) {
   if (!isRecord(value)) { errors.push({ path, message: 'Theme must be an object.', expected: 'theme object', actual: actualType(value), severity: 'error' }); return; }
@@ -130,13 +129,10 @@ function validateReferenceItems(v: unknown, path: string, errors: ValidationIssu
     if (kind === 'roadmap') expectString(entry.purpose, p + '.purpose', errors, true);
   });
 }
-export function validateCanonicalPresentation(value: unknown, options: { allowUnknownKeys?: boolean } = {}): CanonicalValidationResult {
-  const previousUnknownKeyMode = allowUnknownKeysInValidation;
-  allowUnknownKeysInValidation = options.allowUnknownKeys === true;
+export function validateCanonicalPresentation(value: unknown): CanonicalValidationResult {
   const errors: ValidationIssue[] = [], warnings: ValidationIssue[] = [];
   if (!isRecord(value)) {
     errors.push({ path: '$', message: 'Canonical JSON root must be an object.', expected: 'object', actual: actualType(value), severity: 'error' });
-    allowUnknownKeysInValidation = previousUnknownKeyMode;
     return { valid: false, value: null, errors, warnings };
   }
   exactKeys(value, ROOT_KEYS, '', errors);
@@ -334,9 +330,7 @@ export function validateCanonicalPresentation(value: unknown, options: { allowUn
     expectString(item.prompt, p + '.prompt', errors, true);
     if (typeof item.afterSlideId === 'string' && !slideIds.has(item.afterSlideId)) errors.push({ path: p + '.afterSlideId', message: 'Referenced slide ID does not exist.', expected: 'existing slide ID', actual: item.afterSlideId, severity: 'error' });
   });
-  const result = { valid: errors.length === 0, value: errors.length === 0 ? value as unknown as CanonicalPresentation : null, errors, warnings };
-  allowUnknownKeysInValidation = previousUnknownKeyMode;
-  return result;
+  return { valid: errors.length === 0, value: errors.length === 0 ? value as unknown as CanonicalPresentation : null, errors, warnings };
 }
 export function parseCanonicalPresentation(source: string): CanonicalValidationResult {
   let parsed: unknown;
