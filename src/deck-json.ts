@@ -1207,7 +1207,7 @@ function renderGrid(
 function applyElementOpacity(color: string, opacity: unknown): string {
   if (typeof opacity !== 'number' || !Number.isFinite(opacity) || opacity >= 1) return color;
   const alpha = Math.max(0, Math.min(1, opacity));
-  const hex = color.trim().match(/^#([\\da-f]{3}|[\\da-f]{6})$/i);
+  const hex = color.trim().match(/^#([\da-f]{3}|[\da-f]{6})$/i);
   if (hex) {
     const raw = hex[1].length === 3 ? hex[1].split('').map((part) => part + part).join('') : hex[1];
     const red = parseInt(raw.slice(0, 2), 16);
@@ -1215,7 +1215,7 @@ function applyElementOpacity(color: string, opacity: unknown): string {
     const blue = parseInt(raw.slice(4, 6), 16);
     return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
   }
-  const rgb = color.match(/^rgba?\\(\\s*(\\d+)\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)(?:\\s*,\\s*[\\d.]+)?\\s*\\)$/i);
+  const rgb = color.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*[\d.]+)?\s*\)$/i);
   if (rgb) return `rgba(${rgb[1]}, ${rgb[2]}, ${rgb[3]}, ${alpha})`;
   return color;
 }
@@ -1233,7 +1233,7 @@ function resolveDesignToken(value: unknown, fallback: string): string {
 
 function fitCompositionCanvas(frame: { x: number; y: number; w: number; h: number }, canvas: Record<string, unknown>): { x: number; y: number; w: number; h: number } {
   const explicitDimensions = typeof canvas.width === 'number' && canvas.width > 0 && typeof canvas.height === 'number' && canvas.height > 0;
-  const ratioMatch = typeof canvas.aspectRatio === 'string' ? canvas.aspectRatio.match(/^(\\d+(?:\\.\\d+)?)\\s*:\\s*(\\d+(?:\\.\\d+)?)$/) : null;
+  const ratioMatch = typeof canvas.aspectRatio === 'string' ? canvas.aspectRatio.match(/^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/) : null;
   const targetRatio = explicitDimensions
     ? Number(canvas.width) / Number(canvas.height)
     : ratioMatch && Number(ratioMatch[2]) > 0 ? Number(ratioMatch[1]) / Number(ratioMatch[2]) : null;
