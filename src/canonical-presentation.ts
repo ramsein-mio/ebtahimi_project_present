@@ -86,10 +86,17 @@ function validateRenderTheme(value: unknown, path: string, errors: ValidationIss
   exactKeys(value, themeKeys, path, errors, themeKeys);
   const colorKeys = ['background','foreground','text','muted','surface','soft','border','soft2','highlight','primary','secondary','accent'];
   for (const key of colorKeys) if (key in value && value[key] != null) validateColorValue(value[key], path + '.' + key, errors);
-  if ('palette' in value && (!Array.isArray(value.palette) || value.palette.length < 1 || value.palette.length > 12 || value.palette.some((color) => typeof color !== 'string' || !color.trim()))) errors.push({ path: path + '.palette', message: 'Palette must contain 1 to 12 non-empty color strings.', expected: 'string[] of length 1..12', actual: actualType(value.palette), severity: 'error' });
-  if ('semanticColors' in value && (!isRecord(value.semanticColors) || Object.values(value.semanticColors).some((color) => typeof color !== 'string' || !color.trim()))) errors.push({ path: path + '.semanticColors', message: 'Semantic colors must map names to non-empty strings.', expected: 'Record<string, string>', actual: actualType(value.semanticColors), severity: 'error' });
+  if ('palette' in value) {
+    if (!Array.isArray(value.palette) || value.palette.length < 1 || value.palette.length > 12) errors.push({ path: path + '.palette', message: 'Palette must contain 1 to 12 color strings.', expected: 'string[] of length 1..12', actual: actualType(value.palette), severity: 'error' });
+    else value.palette.forEach((color, index) => validateColorValue(color, path + '.palette[' + index + ']', errors));
+  }
+  if ('semanticColors' in value) {
+    if (!isRecord(value.semanticColors)) errors.push({ path: path + '.semanticColors', message: 'Semantic colors must map names to strings.', expected: 'Record<string, string>', actual: actualType(value.semanticColors), severity: 'error' });
+    else Object.entries(value.semanticColors).forEach(([key, color]) => validateColorValue(color, path + '.semanticColors.' + key, errors));
+  }
   if ('fontFamily' in value && !(typeof value.fontFamily === 'string' && value.fontFamily.trim() || Array.isArray(value.fontFamily) && value.fontFamily.length > 0 && value.fontFamily.every((font) => typeof font === 'string' && font.trim()))) errors.push({ path: path + '.fontFamily', message: 'Font family must be a non-empty string or non-empty string array.', expected: 'string | string[]', actual: actualType(value.fontFamily), severity: 'error' });
-  for (const key of ['fontSize','fontScale','radiusScale']) if (key in value && value[key] != null && (!numberInRange(value[key], Number.EPSILON, 4))) errors.push({ path: path + '.' + key, message: 'Theme scale must be positive and bounded.', expected: 'number in (0, 4]', actual: actualType(value[key]), severity: 'error' });
+  if ('fontSize' in value && value.fontSize != null && !numberInRange(value.fontSize, Number.EPSILON, 512)) errors.push({ path: path + '.fontSize', message: 'Theme font size must be positive and bounded.', expected: 'number in (0, 512]', actual: actualType(value.fontSize), severity: 'error' });
+  for (const key of ['fontScale','radiusScale']) if (key in value && value[key] != null && !numberInRange(value[key], Number.EPSILON, 4)) errors.push({ path: path + '.' + key, message: 'Theme scale must be positive and bounded.', expected: 'number in (0, 4]', actual: actualType(value[key]), severity: 'error' });
   if ('shadowStyle' in value && value.shadowStyle != null && !['none','soft','medium','strong'].includes(String(value.shadowStyle))) errors.push({ path: path + '.shadowStyle', message: 'Unsupported shadow style.', expected: 'none | soft | medium | strong', actual: String(value.shadowStyle), severity: 'error' });
   if ('direction' in value && value.direction != null && !['ltr','rtl','auto'].includes(String(value.direction))) errors.push({ path: path + '.direction', message: 'Unsupported text direction.', expected: 'ltr | rtl | auto', actual: String(value.direction), severity: 'error' });
   if ('contrast' in value && value.contrast != null && !['normal','high'].includes(String(value.contrast))) errors.push({ path: path + '.contrast', message: 'Unsupported contrast setting.', expected: 'normal | high', actual: String(value.contrast), severity: 'error' });
@@ -112,7 +119,8 @@ function validateRenderCanvas(value: unknown, path: string, errors: ValidationIs
     else {
       exactKeys(value.safeArea, ['top','right','bottom','left'], path + '.safeArea', errors, ['top','right','bottom','left']);
       const width = typeof value.width === 'number' ? value.width : 1280;
-      const height = typeof value.height === 'number' ? value.height : 720;
+      const ratioMatch = typeof value.aspectRatio === 'string' ? value.aspectRatio.match(/^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/) : null;
+      const height = typeof value.height === 'number' ? value.height : ratioMatch && Number(ratioMatch[2]) > 0 ? width / (Number(ratioMatch[1]) / Number(ratioMatch[2])) : 720;
       for (const edge of ['top','right','bottom','left']) if (edge in value.safeArea && !numberInRange(value.safeArea[edge], 0, Math.min(width, height) / 2)) errors.push({ path: path + '.safeArea.' + edge, message: 'Safe-area inset must be non-negative and no larger than half the shorter canvas edge.', expected: 'bounded non-negative number', actual: actualType(value.safeArea[edge]), severity: 'error' });
     }
   }
@@ -168,8 +176,8 @@ function validateColorValue(value: unknown, path: string, errors: ValidationIssu
   }
   const raw = value.trim();
   const valid = /^theme(?:\.[a-zA-Z][\w.-]*|\.palette\.\d+)?$/.test(raw)
-    || /^(#[\da-f]{3,8}|rgba?\([\d\s.,%/+\-]+\)|hsla?\([\d\s.,%deg/+\-]+\)|transparent|currentColor)$/i.test(raw)
-    || /^[a-z][a-z-]*$/i.test(raw);
+    || /^(#(?:[\da-f]{3}|[\da-f]{4}|[\da-f]{6}|[\da-f]{8})|rgba?\([\d\s.,%/+\-]+\)|hsla?\([\d\s.,%deg/+\-]+\)|transparent|currentColor)$/i.test(raw)
+    || (/^[a-z][a-z-]*$/i.test(raw) && !['none','inherit','initial','unset'].includes(raw.toLowerCase()));
   if (!valid) errors.push({ path, message: 'Color must be a CSS color or a supported theme token.', expected: 'CSS color string or theme token', actual: raw, severity: 'error' });
 }
 
@@ -340,8 +348,14 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
     if ('shadowStyle' in meta && meta.shadowStyle != null && !['none','soft','medium','strong'].includes(String(meta.shadowStyle))) errors.push({ path: 'presentation.shadowStyle', message: 'Unsupported shadow style.', expected: 'none | soft | medium | strong', actual: String(meta.shadowStyle), severity: 'error' });
     if ('contrast' in meta && meta.contrast != null && !['normal','high'].includes(String(meta.contrast))) errors.push({ path: 'presentation.contrast', message: 'Unsupported contrast setting.', expected: 'normal | high', actual: String(meta.contrast), severity: 'error' });
     if ('locale' in meta && meta.locale != null && (typeof meta.locale !== 'string' || !/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(meta.locale))) errors.push({ path: 'presentation.locale', message: 'Locale must be a valid language/region tag.', expected: 'BCP 47 language tag, e.g. fa-IR or en-US', actual: String(meta.locale), severity: 'error' });
-    if ('palette' in meta && meta.palette != null && (!Array.isArray(meta.palette) || meta.palette.length < 1 || meta.palette.length > 12 || meta.palette.some((c) => typeof c !== 'string' || !c.trim()))) errors.push({ path: 'presentation.palette', message: 'Palette must contain 1 to 12 non-empty color strings.', expected: 'string[] of length 1..12', actual: actualType(meta.palette), severity: 'error' });
-    if ('semanticColors' in meta && meta.semanticColors != null && (!isRecord(meta.semanticColors) || Object.values(meta.semanticColors).some((color) => typeof color !== 'string' || !color.trim()))) errors.push({ path: 'presentation.semanticColors', message: 'semanticColors must map names to non-empty strings.', expected: 'Record<string, string>', actual: actualType(meta.semanticColors), severity: 'error' });
+    if ('palette' in meta && meta.palette != null) {
+      if (!Array.isArray(meta.palette) || meta.palette.length < 1 || meta.palette.length > 12) errors.push({ path: 'presentation.palette', message: 'Palette must contain 1 to 12 color strings.', expected: 'string[] of length 1..12', actual: actualType(meta.palette), severity: 'error' });
+      else meta.palette.forEach((color, index) => validateColorValue(color, 'presentation.palette[' + index + ']', errors));
+    }
+    if ('semanticColors' in meta && meta.semanticColors != null) {
+      if (!isRecord(meta.semanticColors)) errors.push({ path: 'presentation.semanticColors', message: 'semanticColors must map names to strings.', expected: 'Record<string, string>', actual: actualType(meta.semanticColors), severity: 'error' });
+      else Object.entries(meta.semanticColors).forEach(([key, color]) => validateColorValue(color, 'presentation.semanticColors.' + key, errors));
+    }
     const metadataCanvas = isRecord(meta.canvas) ? meta.canvas : {};
     const layoutWidth = typeof metadataCanvas.width === 'number' ? metadataCanvas.width : 1280;
     const ratioMatch = typeof metadataCanvas.aspectRatio === 'string' ? metadataCanvas.aspectRatio.match(/^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/) : null;
@@ -459,7 +473,7 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
                 errors.push({ path: ep + '.' + key, message: 'Geometry must be finite and normalized.', expected: dimension ? (isLinearShape ? 'finite number; signed or zero dimensions allowed for line-like shapes' : 'number > 0') : 'number in [0, 1]', actual: actualType(element[key]), severity: 'error' });
               }
             }
-            if ('zIndex' in element && (!Number.isInteger(element.zIndex) || !numberInRange(element.zIndex, -10000, 10000))) errors.push({ path: ep + '.zIndex', message: 'zIndex must be a bounded integer.', expected: 'integer in [-10000, 10000]', actual: actualType(element.zIndex), severity: 'error' });
+            if ('zIndex' in element && (typeof element.zIndex !== 'number' || !Number.isFinite(element.zIndex) || Math.abs(element.zIndex) > 1000000)) errors.push({ path: ep + '.zIndex', message: 'zIndex must be a finite, bounded number.', expected: 'finite number in [-1000000, 1000000]', actual: actualType(element.zIndex), severity: 'error' });
             if ('rotation' in element && (typeof element.rotation !== 'number' || !Number.isFinite(element.rotation) || Math.abs(element.rotation) > 3600)) errors.push({ path: ep + '.rotation', message: 'rotation must be finite and bounded.', expected: 'number in [-3600, 3600] degrees', actual: actualType(element.rotation), severity: 'error' });
             if (isLinearShape && typeof element.w === 'number' && typeof element.h === 'number' && element.w === 0 && element.h === 0) errors.push({ path: ep, message: 'A line-like element must have a non-zero vector.', expected: 'w != 0 or h != 0', actual: 'w = 0 and h = 0', severity: 'error' });
             if (element.type !== 'polygon' && 'points' in element && element.points != null) errors.push({ path: ep + '.points', message: 'points are only supported for polygon shapes.', expected: 'polygon shape', actual: String(element.type), severity: 'error' });
