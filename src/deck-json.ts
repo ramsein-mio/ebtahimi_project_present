@@ -261,6 +261,7 @@ function resolveSlideTheme(deck: ReferenceDeckInput, source: ReferenceSlideInput
     fontScale: slideTheme.fontScale ?? metadataTheme.fontScale ?? metadata.fontScale ?? rootTheme.fontScale,
     spacingScale: slideTheme.spacingScale ?? metadataTheme.spacingScale ?? metadata.spacingScale ?? rootTheme.spacingScale,
     radiusScale: slideTheme.radiusScale ?? metadataTheme.radiusScale ?? metadata.radiusScale ?? rootTheme.radiusScale,
+    fontSize: slideTheme.fontSize ?? metadataTheme.fontSize ?? metadata.fontSize ?? rootTheme.fontSize,
     shadowStyle: slideTheme.shadowStyle ?? metadataTheme.shadowStyle ?? metadata.shadowStyle ?? rootTheme.shadowStyle,
     contrast: slideTheme.contrast ?? metadataTheme.contrast ?? metadata.contrast ?? rootTheme.contrast,
   };
@@ -1230,6 +1231,22 @@ function resolveDesignToken(value: unknown, fallback: string): string {
   return ACTIVE_THEME_TOKENS[key] ?? fallback;
 }
 
+function fitCompositionCanvas(frame: { x: number; y: number; w: number; h: number }, canvas: Record<string, unknown>): { x: number; y: number; w: number; h: number } {
+  const explicitDimensions = typeof canvas.width === 'number' && canvas.width > 0 && typeof canvas.height === 'number' && canvas.height > 0;
+  const ratioMatch = typeof canvas.aspectRatio === 'string' ? canvas.aspectRatio.match(/^(\\d+(?:\\.\\d+)?)\\s*:\\s*(\\d+(?:\\.\\d+)?)$/) : null;
+  const targetRatio = explicitDimensions
+    ? Number(canvas.width) / Number(canvas.height)
+    : ratioMatch && Number(ratioMatch[2]) > 0 ? Number(ratioMatch[1]) / Number(ratioMatch[2]) : null;
+  if (targetRatio === null || !Number.isFinite(targetRatio) || targetRatio <= 0) return frame;
+  const availableRatio = frame.w / frame.h;
+  if (availableRatio > targetRatio) {
+    const width = frame.h * targetRatio;
+    return { ...frame, x: frame.x + (frame.w - width) / 2, w: width };
+  }
+  const height = frame.w / targetRatio;
+  return { ...frame, y: frame.y + (frame.h - height) / 2, h: height };
+}
+
 function renderShapeComposition(
   visual: Record<string, unknown>,
   elements: SlideElement[],
@@ -1238,7 +1255,7 @@ function renderShapeComposition(
   const data = isRecord(visual.data) ? visual.data : {};
   if (!Array.isArray(data.elements)) return;
   const compositionCanvas = isRecord(data.canvas) ? data.canvas : {};
-  frame = insetFrame(frame, compositionCanvas.safeArea);
+  frame = insetFrame(fitCompositionCanvas(frame, compositionCanvas), compositionCanvas.safeArea);
   const source = data.elements
     .map((element, index) => ({ element, index }))
     .filter((item) => isRecord(item.element))
@@ -1330,7 +1347,7 @@ function renderShapeComposition(
     const rawText = typeof content.text === 'string' ? content.text : typeof content.value === 'string' ? content.value : typeof item.text === 'string' ? item.text : '';
     const isText = type === 'text' || rawText.length > 0;
     const localScale = typeof style.fontScale === 'number' && Number.isFinite(style.fontScale) ? Math.max(0.1, Math.min(4, style.fontScale)) : 1;
-    const rawFontSize = typeof style.fontSize === 'number' && Number.isFinite(style.fontSize) ? style.fontSize : 16;
+    const rawFontSize = typeof style.fontSize === 'number' && Number.isFinite(style.fontSize) ? style.fontSize : typeof metadata.fontSize === 'number' && Number.isFinite(metadata.fontSize) ? metadata.fontSize : 16;
     const fontSizeUnit = style.fontSizeUnit;
     const baseFontSize = fontSizeUnit === 'canvas-ratio'
       ? rawFontSize * ACTIVE_HEIGHT
@@ -1393,7 +1410,8 @@ function contentSlide(source: ReferenceSlideInput, deck: ReferenceDeckInput): Sl
     rootCanvas.mode === 'fullscreen';
   if (fullscreen && visual.type === 'shape-composition') {
     const globalSafeArea = isRecord(metadataCanvas.safeArea) ? metadataCanvas.safeArea : rootCanvas.safeArea;
-    const fullscreenFrame = insetFrame({ x: 0, y: 0, w: ACTIVE_WIDTH, h: ACTIVE_HEIGHT }, globalSafeArea);
+    const canvas = isRecord(visual.data) && isRecord(visual.data.canvas) ? visual.data.canvas : {};
+    const fullscreenFrame = insetFrame(fitCompositionCanvas({ x: 0, y: 0, w: ACTIVE_WIDTH, h: ACTIVE_HEIGHT }, canvas), globalSafeArea);
     renderShapeComposition(visual, elements, fullscreenFrame);
     return {
       background: slideBackground(source, deck),
