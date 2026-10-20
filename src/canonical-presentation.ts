@@ -4,7 +4,7 @@ import {
   COMPOSITION_STYLE_KEYS,
   SUPPORTED_COMPOSITION_SHAPE_TYPES,
 } from './shape-composition-contract';
-import { isSupportedVisualType, VISUAL_RENDERER_REGISTRY } from './visual-contract';
+import { isSupportedVisualType, SUPPORTED_VISUAL_TYPES, VISUAL_RENDERER_REGISTRY } from './visual-contract';
 import { THEMES } from './viewer/themes';
 
 export type CognitiveLoad = 'low' | 'medium' | 'high';
@@ -105,7 +105,9 @@ function validateRenderTheme(value: unknown, path: string, errors: ValidationIss
   if ('palette' in value && (!Array.isArray(value.palette) || value.palette.some((color) => typeof color !== 'string'))) issue(errors, path + '.palette', 'Palette must be an array of color strings.', 'string[]', value.palette);
   if ('semanticColors' in value && (!isRecord(value.semanticColors) || Object.values(value.semanticColors).some((color) => typeof color !== 'string'))) issue(errors, path + '.semanticColors', 'Semantic colors must map names to strings.', 'Record<string, string>', value.semanticColors);
   if ('fontFamily' in value && !(typeof value.fontFamily === 'string' && value.fontFamily.trim().length > 0 || Array.isArray(value.fontFamily) && value.fontFamily.length > 0 && value.fontFamily.every((font) => typeof font === 'string' && font.trim().length > 0))) issue(errors, path + '.fontFamily', 'Font family must be a non-empty string or array.', 'string | non-empty string[]', value.fontFamily);
-  for (const key of ['fontSize','fontScale','radiusScale']) if (key in value && (typeof value[key] !== 'number' || !Number.isFinite(value[key]) || Number(value[key]) <= 0 || Number(value[key]) > 8 && key !== 'fontSize' || Number(value[key]) > 512 && key === 'fontSize')) issue(errors, path + '.' + key, 'Typography and radius values must be positive finite numbers within the supported bound.', key === 'fontSize' ? 'number in (0,512]' : 'number in (0,8]', value[key]);
+  if ('fontSize' in value && (typeof value.fontSize !== 'number' || !Number.isFinite(value.fontSize) || value.fontSize < 6 || value.fontSize > 512)) issue(errors, path + '.fontSize', 'fontSize is measured in CSS pixels.', 'number in [6, 512] pixels', value.fontSize);
+  if ('fontScale' in value && (typeof value.fontScale !== 'number' || !Number.isFinite(value.fontScale) || value.fontScale < 0.5 || value.fontScale > 2)) issue(errors, path + '.fontScale', 'fontScale must stay within the supported typography scale.', 'number in [0.5, 2]', value.fontScale);
+  if ('radiusScale' in value && (typeof value.radiusScale !== 'number' || !Number.isFinite(value.radiusScale) || value.radiusScale < 0.25 || value.radiusScale > 3)) issue(errors, path + '.radiusScale', 'radiusScale must stay within the supported radius scale.', 'number in [0.25, 3]', value.radiusScale);
   if ('shadowStyle' in value && !['none','soft','medium','strong'].includes(String(value.shadowStyle))) issue(errors, path + '.shadowStyle', 'Unsupported shadow style.', 'none | soft | medium | strong', value.shadowStyle);
   if ('contrast' in value && !['normal','high'].includes(String(value.contrast))) issue(errors, path + '.contrast', 'Unsupported contrast mode.', 'normal | high', value.contrast);
   if ('direction' in value && !['ltr','rtl','auto'].includes(String(value.direction))) issue(errors, path + '.direction', 'Unsupported text direction.', 'ltr | rtl | auto', value.direction);
@@ -286,7 +288,9 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
     if ('contrast' in meta && meta.contrast != null && !['normal','high'].includes(String(meta.contrast))) issue(errors, 'presentation.contrast', 'Unsupported contrast mode.', 'normal | high', meta.contrast);
     if ('shadowStyle' in meta && meta.shadowStyle != null && !['none','soft','medium','strong'].includes(String(meta.shadowStyle))) issue(errors, 'presentation.shadowStyle', 'Unsupported shadow style.', 'none | soft | medium | strong', meta.shadowStyle);
     if (typeof meta.theme === 'string' && !THEMES.some((theme) => theme.id === meta.theme)) warnings.push({ path: 'presentation.theme', message: 'Unknown theme ID; rendering uses the compatible light theme unless explicit design colors override it.', expected: THEMES.map((theme) => theme.id).join(' | '), actual: meta.theme, severity: 'warning' });
-    for (const key of ['fontScale','spacingScale','radiusScale']) if (key in meta && meta[key] != null && (typeof meta[key] !== 'number' || !Number.isFinite(meta[key]) || Number(meta[key]) <= 0)) errors.push({ path: 'presentation.' + key, message: 'Scale must be a positive finite number.', expected: 'number > 0', actual: actualType(meta[key]), severity: 'error' });
+    if (meta.fontScale != null && (typeof meta.fontScale !== 'number' || !Number.isFinite(meta.fontScale) || meta.fontScale < 0.5 || meta.fontScale > 2)) issue(errors, 'presentation.fontScale', 'fontScale must stay within the supported typography scale.', 'number in [0.5, 2]', meta.fontScale);
+    if (meta.spacingScale != null && (typeof meta.spacingScale !== 'number' || !Number.isFinite(meta.spacingScale) || meta.spacingScale < 0.5 || meta.spacingScale > 2)) issue(errors, 'presentation.spacingScale', 'spacingScale must stay within the supported spacing scale.', 'number in [0.5, 2]', meta.spacingScale);
+    if (meta.radiusScale != null && (typeof meta.radiusScale !== 'number' || !Number.isFinite(meta.radiusScale) || meta.radiusScale < 0.25 || meta.radiusScale > 3)) issue(errors, 'presentation.radiusScale', 'radiusScale must stay within the supported radius scale.', 'number in [0.25, 3]', meta.radiusScale);
     if ('palette' in meta && meta.palette != null && (!Array.isArray(meta.palette) || meta.palette.some((c) => typeof c !== 'string'))) errors.push({ path: 'presentation.palette', message: 'Palette must be an array of strings.', expected: 'string[]', actual: actualType(meta.palette), severity: 'error' });
     if ('semanticColors' in meta && meta.semanticColors != null && (!isRecord(meta.semanticColors) || Object.values(meta.semanticColors).some((color) => typeof color !== 'string'))) errors.push({ path: 'presentation.semanticColors', message: 'semanticColors must map names to strings.', expected: 'Record<string, string>', actual: actualType(meta.semanticColors), severity: 'error' });
     if ('layoutDefaults' in meta && meta.layoutDefaults != null) {
@@ -314,7 +318,7 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
       if (!isRecord(slide.layoutConfig)) issue(errors, p + '.layoutConfig', 'layoutConfig must be an object or null.', 'object | null', slide.layoutConfig);
       else validateLayoutConfig(slide.layoutConfig, p + '.layoutConfig', errors);
     }
-    if ('background' in slide && slide.background != null && !(typeof slide.background === 'string' || isRecord(slide.background) && (slide.background.color === undefined || typeof slide.background.color === 'string'))) errors.push({ path: p + '.background', message: 'Slide background must be a color string or color object.', expected: 'string | { color: string }', actual: actualType(slide.background), severity: 'error' });
+    if ('background' in slide && slide.background != null && !(typeof slide.background === 'string' || isRecord(slide.background) && typeof slide.background.color === 'string')) errors.push({ path: p + '.background', message: 'Slide background must be a color string or an object with a string color.', expected: 'string | { color: string }', actual: actualType(slide.background), severity: 'error' });
     for (const key of ['id','section','layout','title','speakerNotes','psychologicalPurpose','sourceReference']) expectString(slide[key], p + '.' + key, errors, key === 'id' || key === 'title');
     const supportedLayouts = ['title','content','visual-right','image-led-right','asymmetric-editorial','graphic-fullscreen','full-bleed','shape-composition'];
     if (typeof slide.layout === 'string' && !supportedLayouts.includes(slide.layout)) warnings.push({
@@ -345,12 +349,12 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
     else {
       exactKeys(visual, VISUAL_KEYS, p + '.visual', errors);
       expectString(visual.type, p + '.visual.type', errors, true);
-      const supportedVisuals = ['none','icon-list','bar-chart','line-chart','pie-chart','comparison-grid','table','shape-composition'];
+      const supportedVisuals: readonly string[] = SUPPORTED_VISUAL_TYPES;
       if (typeof visual.type === 'string' && !supportedVisuals.includes(visual.type)) issue(errors, p + '.visual.type', 'This visual type has no registered validator and renderer.', supportedVisuals.join(' | '), visual.type);
       if (!isRecord(visual.data)) errors.push({ path: p + '.visual.data', message: 'Visual data must be an object.', expected: 'object', actual: actualType(visual.data), severity: 'error' });
       else if (typeof visual.type === 'string' && isSupportedVisualType(visual.type)) validateVisualData(visual.type, visual.data, p + '.visual.data', errors);
       expectNullableString(visual.caption, p + '.visual.caption', errors);
-      if ((slide.layout === 'graphic-fullscreen' || slide.layout === 'full-bleed') && visual.type !== 'shape-composition') issue(errors, p + '.visual.type', 'Fullscreen layouts require shape-composition so the chosen layout is actually rendered full-bleed.', 'shape-composition', visual.type);
+      if ((slide.layout === 'graphic-fullscreen' || slide.layout === 'full-bleed' || slide.layout === 'shape-composition') && visual.type !== 'shape-composition') issue(errors, p + '.visual.type', 'Fullscreen layouts require shape-composition so the chosen layout is actually rendered full-bleed.', 'shape-composition', visual.type);
       if (visual.type === 'shape-composition' && isRecord(visual.data)) {
         exactKeys(visual.data, ['version', 'canvas', 'elements'], p + '.visual.data', errors, ['canvas']);
         if (visual.data.version !== 1) errors.push({ path: p + '.visual.data.version', message: 'Unsupported shape composition version.', expected: '1', actual: String(visual.data.version), severity: 'error' });
