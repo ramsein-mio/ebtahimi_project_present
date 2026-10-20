@@ -91,6 +91,17 @@ const THEME_COLOR_KEYS = ['background','foreground','text','muted','surface','so
 function issue(errors: ValidationIssue[], path: string, message: string, expected: string, value: unknown) {
   errors.push({ path, message, expected, actual: actualType(value), severity: 'error' });
 }
+function isColorExpression(value: unknown): value is string {
+  if (typeof value !== 'string' || !value.trim()) return false;
+  const color = value.trim();
+  return /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(color)
+    || /^(?:rgb|rgba|hsl|hsla)\([\d\s.,%+\-/degturnrad]*\)$/i.test(color)
+    || /^(?:transparent|currentcolor|[a-z][a-z-]*)$/i.test(color)
+    || /^theme(?:\.[a-z][a-z\d_-]*(?:\.[a-z\d_-]+)*)?$/i.test(color);
+}
+function validateColor(value: unknown, path: string, errors: ValidationIssue[]) {
+  if (!isColorExpression(value)) issue(errors, path, 'Expected a CSS color or supported theme token.', 'CSS color | theme.token | none', value);
+}
 function expectFiniteNumber(value: unknown, path: string, errors: ValidationIssue[], min = -Infinity, max = Infinity): value is number {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) {
     errors.push({ path, message: 'Expected a finite number in the supported range.', expected: `${min}..${max}`, actual: actualType(value), severity: 'error' });
@@ -101,9 +112,15 @@ function expectFiniteNumber(value: unknown, path: string, errors: ValidationIssu
 function validateRenderTheme(value: unknown, path: string, errors: ValidationIssue[]) {
   if (!isRecord(value)) { issue(errors, path, 'Theme must be an object.', 'theme object', value); return; }
   exactKeys(value, THEME_KEYS, path, errors, THEME_KEYS);
-  for (const key of THEME_COLOR_KEYS) if (key in value && typeof value[key] !== 'string') issue(errors, path + '.' + key, 'Theme color must be a string.', 'CSS color string or theme token', value[key]);
-  if ('palette' in value && (!Array.isArray(value.palette) || value.palette.some((color) => typeof color !== 'string'))) issue(errors, path + '.palette', 'Palette must be an array of color strings.', 'string[]', value.palette);
-  if ('semanticColors' in value && (!isRecord(value.semanticColors) || Object.values(value.semanticColors).some((color) => typeof color !== 'string'))) issue(errors, path + '.semanticColors', 'Semantic colors must map names to strings.', 'Record<string, string>', value.semanticColors);
+  for (const key of THEME_COLOR_KEYS) if (key in value) validateColor(value[key], path + '.' + key, errors);
+  if ('palette' in value) {
+    if (!Array.isArray(value.palette) || value.palette.length < 2 || value.palette.length > 6) issue(errors, path + '.palette', 'Palette must contain between 2 and 6 colors.', 'array of 2..6 color strings', value.palette);
+    else value.palette.forEach((color,index) => validateColor(color, path + '.palette[' + index + ']', errors));
+  }
+  if ('semanticColors' in value) {
+    if (!isRecord(value.semanticColors)) issue(errors, path + '.semanticColors', 'Semantic colors must map names to colors.', 'Record<string, color>', value.semanticColors);
+    else for (const [key,color] of Object.entries(value.semanticColors)) validateColor(color, path + '.semanticColors.' + key, errors);
+  }
   if ('fontFamily' in value && !(typeof value.fontFamily === 'string' && value.fontFamily.trim().length > 0 || Array.isArray(value.fontFamily) && value.fontFamily.length > 0 && value.fontFamily.every((font) => typeof font === 'string' && font.trim().length > 0))) issue(errors, path + '.fontFamily', 'Font family must be a non-empty string or array.', 'string | non-empty string[]', value.fontFamily);
   if ('fontSize' in value && (typeof value.fontSize !== 'number' || !Number.isFinite(value.fontSize) || value.fontSize < 6 || value.fontSize > 512)) issue(errors, path + '.fontSize', 'fontSize is measured in CSS pixels.', 'number in [6, 512] pixels', value.fontSize);
   if ('fontScale' in value && (typeof value.fontScale !== 'number' || !Number.isFinite(value.fontScale) || value.fontScale < 0.5 || value.fontScale > 2)) issue(errors, path + '.fontScale', 'fontScale must stay within the supported typography scale.', 'number in [0.5, 2]', value.fontScale);
@@ -121,7 +138,7 @@ function validateRenderCanvas(value: unknown, path: string, errors: ValidationIs
     const match = typeof value.aspectRatio === 'string' ? value.aspectRatio.match(/^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/) : null;
     if (!match || Number(match[1]) <= 0 || Number(match[2]) <= 0 || !Number.isFinite(Number(match[1])) || !Number.isFinite(Number(match[2]))) issue(errors, path + '.aspectRatio', 'Aspect ratio must contain two positive numbers.', 'positive W:H ratio, e.g. 16:9', value.aspectRatio);
   }
-  if ('background' in value && typeof value.background !== 'string') issue(errors, path + '.background', 'Canvas background must be a color string or theme token.', 'string', value.background);
+  if ('background' in value) validateColor(value.background, path + '.background', errors);
   if ('fullscreen' in value && typeof value.fullscreen !== 'boolean') issue(errors, path + '.fullscreen', 'fullscreen must be boolean.', 'boolean', value.fullscreen);
   if ('mode' in value && (typeof value.mode !== 'string' || !['fullscreen','fit','fixed'].includes(value.mode))) issue(errors, path + '.mode', 'Unsupported canvas mode.', 'fullscreen | fit | fixed', value.mode);
   if ('safeArea' in value) {
@@ -209,9 +226,11 @@ function validateVisualData(type: string, value: unknown, path: string, errors: 
       if (refLabels && (labels.length !== refLabels.length || labels.some((label,i) => label !== refLabels![i]))) errors.push({ path: sp + '.values', message: 'All bar-chart series must share category labels in the same order.', expected: JSON.stringify(refLabels), actual: JSON.stringify(labels), severity: 'error' });
       else if (!refLabels) refLabels = labels;
     });
+    for (const key of ['xAxisLabel','yAxisLabel']) if (key in value && typeof value[key] !== 'string') issue(errors,path + '.' + key,'Axis label must be a string.','string',value[key]);
     if ('unit' in value && typeof value.unit !== 'string') issue(errors,path + '.unit','Chart unit must be a string.','string, e.g. %, €, ms',value.unit);
   } else if (type === 'line-chart') {
     if (!Array.isArray(value.series) || value.series.length === 0) { issue(errors,path + '.series','Line chart requires at least one series.','non-empty series array',value.series); return; }
+    for (const key of ['xAxisLabel','yAxisLabel']) if (key in value && typeof value[key] !== 'string') issue(errors,path + '.' + key,'Axis label must be a string.','string',value[key]);
     let xKind: 'number' | 'string' | undefined;
     value.series.forEach((series,index) => {
       const sp = path + '.series[' + index + ']';
@@ -283,6 +302,7 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
   else {
     exactKeys(meta, META_KEYS, 'presentation', errors, ['subtitle','design','canvas','background','direction','locale','fontScale','spacingScale','radiusScale','shadowStyle','contrast','palette','semanticColors','assets','layoutDefaults']);
     for (const key of ['title','language','theme','targetAudience']) expectString(meta[key], 'presentation.' + key, errors, true);
+    if (typeof meta.language === 'string' && meta.language.trim()) { try { new Intl.Locale(meta.language); } catch { issue(errors, 'presentation.language', 'language must be a valid BCP 47 language tag.', 'e.g. fa, fa-IR, en-US', meta.language); } }
     if ('design' in meta && meta.design != null) validateRenderTheme(meta.design, 'presentation.design', errors);
     if ('canvas' in meta && meta.canvas != null) validateRenderCanvas(meta.canvas, 'presentation.canvas', errors);
     for (const key of ['direction']) if (key in meta && meta[key] != null && !['ltr','rtl','auto'].includes(String(meta[key]))) errors.push({ path: 'presentation.' + key, message: 'Unsupported text direction.', expected: 'ltr | rtl | auto', actual: String(meta[key]), severity: 'error' });
@@ -296,13 +316,27 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
     if (meta.fontScale != null && (typeof meta.fontScale !== 'number' || !Number.isFinite(meta.fontScale) || meta.fontScale < 0.5 || meta.fontScale > 2)) issue(errors, 'presentation.fontScale', 'fontScale must stay within the supported typography scale.', 'number in [0.5, 2]', meta.fontScale);
     if (meta.spacingScale != null && (typeof meta.spacingScale !== 'number' || !Number.isFinite(meta.spacingScale) || meta.spacingScale < 0.5 || meta.spacingScale > 2)) issue(errors, 'presentation.spacingScale', 'spacingScale must stay within the supported spacing scale.', 'number in [0.5, 2]', meta.spacingScale);
     if (meta.radiusScale != null && (typeof meta.radiusScale !== 'number' || !Number.isFinite(meta.radiusScale) || meta.radiusScale < 0.25 || meta.radiusScale > 3)) issue(errors, 'presentation.radiusScale', 'radiusScale must stay within the supported radius scale.', 'number in [0.25, 3]', meta.radiusScale);
-    if ('palette' in meta && meta.palette != null && (!Array.isArray(meta.palette) || meta.palette.some((c) => typeof c !== 'string'))) errors.push({ path: 'presentation.palette', message: 'Palette must be an array of strings.', expected: 'string[]', actual: actualType(meta.palette), severity: 'error' });
-    if ('semanticColors' in meta && meta.semanticColors != null && (!isRecord(meta.semanticColors) || Object.values(meta.semanticColors).some((color) => typeof color !== 'string'))) errors.push({ path: 'presentation.semanticColors', message: 'semanticColors must map names to strings.', expected: 'Record<string, string>', actual: actualType(meta.semanticColors), severity: 'error' });
+    if ('palette' in meta && meta.palette != null) {
+      if (!Array.isArray(meta.palette) || meta.palette.length < 2 || meta.palette.length > 6) issue(errors, 'presentation.palette', 'Palette must contain between 2 and 6 colors.', 'array of 2..6 color strings', meta.palette);
+      else meta.palette.forEach((color,index) => validateColor(color, 'presentation.palette[' + index + ']', errors));
+    }
+    if ('semanticColors' in meta && meta.semanticColors != null) {
+      if (!isRecord(meta.semanticColors)) issue(errors, 'presentation.semanticColors', 'semanticColors must map names to colors.', 'Record<string, color>', meta.semanticColors);
+      else for (const [key,color] of Object.entries(meta.semanticColors)) validateColor(color, 'presentation.semanticColors.' + key, errors);
+    }
+    if ('assets' in meta && meta.assets != null) {
+      if (!Array.isArray(meta.assets)) issue(errors, 'presentation.assets', 'assets must be an array of resource objects.', 'object[]', meta.assets);
+      else meta.assets.forEach((asset,index) => {
+        const ap = 'presentation.assets[' + index + ']';
+        if (!isRecord(asset)) { issue(errors, ap, 'Asset metadata must be an object.', 'resource object', asset); return; }
+        for (const key of ['id','type','src','url','mimeType','alt','title','description']) if (key in asset && typeof asset[key] !== 'string') issue(errors, ap + '.' + key, 'Known asset metadata fields must be strings.', 'string', asset[key]);
+      });
+    }
     if ('layoutDefaults' in meta && meta.layoutDefaults != null) {
       if (!isRecord(meta.layoutDefaults)) issue(errors, 'presentation.layoutDefaults', 'layoutDefaults must be an object.', 'layout configuration object', meta.layoutDefaults);
       else validateLayoutConfig(meta.layoutDefaults, 'presentation.layoutDefaults', errors);
     }
-    if ('background' in meta && meta.background != null && typeof meta.background !== 'string') errors.push({ path: 'presentation.background', message: 'Background must be a color string.', expected: 'CSS color string', actual: actualType(meta.background), severity: 'error' });
+    if ('background' in meta && meta.background != null) validateColor(meta.background, 'presentation.background', errors);
     expectNullableString(meta.subtitle, 'presentation.subtitle', errors);
     if (typeof meta.estimatedTotalDurationSeconds !== 'number' || !Number.isFinite(meta.estimatedTotalDurationSeconds) || meta.estimatedTotalDurationSeconds <= 0)
       errors.push({ path: 'presentation.estimatedTotalDurationSeconds', message: 'Duration must be a positive finite number.', expected: 'number > 0', actual: actualType(meta.estimatedTotalDurationSeconds), severity: 'error' });
@@ -323,8 +357,14 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
       if (!isRecord(slide.layoutConfig)) issue(errors, p + '.layoutConfig', 'layoutConfig must be an object or null.', 'object | null', slide.layoutConfig);
       else validateLayoutConfig(slide.layoutConfig, p + '.layoutConfig', errors);
     }
-    if ('background' in slide && slide.background != null && !(typeof slide.background === 'string' || isRecord(slide.background) && typeof slide.background.color === 'string')) errors.push({ path: p + '.background', message: 'Slide background must be a color string or an object with a string color.', expected: 'string | { color: string }', actual: actualType(slide.background), severity: 'error' });
-    for (const key of ['id','section','layout','title','speakerNotes','psychologicalPurpose','sourceReference']) expectString(slide[key], p + '.' + key, errors, key === 'id' || key === 'title');
+    if ('background' in slide && slide.background != null) {
+      if (typeof slide.background === 'string') validateColor(slide.background, p + '.background', errors);
+      else if (isRecord(slide.background)) {
+        exactKeys(slide.background, ['color'], p + '.background', errors);
+        validateColor(slide.background.color, p + '.background.color', errors);
+      } else issue(errors, p + '.background', 'Slide background must be a color string or an object with a string color.', 'string | { color: string }', slide.background);
+    }
+    for (const key of ['id','section','layout','title','speakerNotes','psychologicalPurpose','sourceReference']) expectString(slide[key], p + '.' + key, errors, ['id','section','layout','title'].includes(key));
     const supportedLayouts = ['title','content','visual-right','image-led-right','asymmetric-editorial','graphic-fullscreen','full-bleed','shape-composition'];
     if (typeof slide.layout === 'string' && !supportedLayouts.includes(slide.layout)) warnings.push({
       path: p + '.layout',
