@@ -117,7 +117,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function colorString(value: unknown, fallback: string): string {
   if (typeof value !== 'string') return fallback;
   const color = value.trim();
-  const isColor = /^(#[\da-f]{3,8}|rgba?\([\d\s.,%]+\)|hsla?\([\d\s.,%deg]+\)|transparent)$/i.test(color)
+  const isColor = /^(#(?:[\da-f]{3}|[\da-f]{4}|[\da-f]{6}|[\da-f]{8})|rgba?\([\d\s.,%/+\-]+\)|hsla?\([\d\s.,%deg/+\-]+\)|transparent|currentColor)$/i.test(color)
     || (/^[a-z][a-z-]*$/i.test(color) && !['theme', 'none', 'inherit', 'initial', 'unset'].includes(color.toLowerCase()));
   return isColor ? color : fallback;
 }
@@ -267,12 +267,9 @@ function resolveSlideTheme(deck: ReferenceDeckInput, source: ReferenceSlideInput
   };
   const rootCanvas = isRecord(deck.canvas) ? deck.canvas : {};
   const metadataCanvas = isRecord(metadata.canvas) ? metadata.canvas : {};
-  const visual = isRecord(source.visual) ? source.visual : {};
-  const data = isRecord(visual.data) ? visual.data : {};
-  const canvas = isRecord(data.canvas) ? data.canvas : {};
   const slideBackground = isRecord(source.background) ? source.background.color : source.background;
   const background = configuredThemeColor(
-    slideBackground ?? canvas.background ?? metadataCanvas.background ?? rootCanvas.background ?? metadata.background ?? theme.background,
+    slideBackground ?? metadataCanvas.background ?? rootCanvas.background ?? metadata.background ?? theme.background,
     DEFAULT_COLORS.background,
     theme,
   );
@@ -350,12 +347,10 @@ function slideBackground(source: ReferenceSlideInput, deck: ReferenceDeckInput):
   const metadata = isRecord(deck.presentation) ? deck.presentation : {};
   const rootCanvas = isRecord(deck.canvas) ? deck.canvas : {};
   const metadataCanvas = isRecord(metadata.canvas) ? metadata.canvas : {};
-  const visual = isRecord(source.visual) ? source.visual : {};
-  const data = isRecord(visual.data) ? visual.data : {};
-  const canvas = isRecord(data.canvas) ? data.canvas : {};
   const explicit = isRecord(source.background) ? source.background.color : source.background;
-  // Keep exactly the same background precedence used when resolving theme tokens.
-  const value = explicit ?? canvas.background ?? metadataCanvas.background ?? rootCanvas.background ?? metadata.background ?? COLORS.background;
+  // A shape-composition canvas background belongs to that composition viewport,
+  // not to the entire slide background. It is painted inside the viewport below.
+  const value = explicit ?? metadataCanvas.background ?? rootCanvas.background ?? metadata.background ?? COLORS.background;
   return { type: 'solid', color: resolveDesignToken(value, COLORS.background) };
 }
 function isLineObject(value: unknown): value is LineObject {
@@ -1255,7 +1250,14 @@ function renderShapeComposition(
   const data = isRecord(visual.data) ? visual.data : {};
   if (!Array.isArray(data.elements)) return;
   const compositionCanvas = isRecord(data.canvas) ? data.canvas : {};
-  frame = insetFrame(fitCompositionCanvas(frame, compositionCanvas), compositionCanvas.safeArea);
+  const compositionFrame = fitCompositionCanvas(frame, compositionCanvas);
+  frame = insetFrame(compositionFrame, compositionCanvas.safeArea);
+  if (typeof compositionCanvas.background === 'string') {
+    const compositionBackground = resolveDesignToken(compositionCanvas.background, COLORS.background);
+    if (compositionBackground !== COLORS.background) {
+      elements.push(shape(compositionFrame.x, compositionFrame.y, compositionFrame.w, compositionFrame.h, rectPath(compositionFrame.w, compositionFrame.h), { type: 'solid', color: compositionBackground }, null, null, 'composition-canvas-background'));
+    }
+  }
   const source = data.elements
     .map((element, index) => ({ element, index }))
     .filter((item) => isRecord(item.element))
