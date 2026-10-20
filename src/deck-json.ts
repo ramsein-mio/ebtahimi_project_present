@@ -12,6 +12,7 @@ import type {
 import { encodePresentationLineName } from './presentation-interactions';
 import { SUPPORTED_COMPOSITION_SHAPE_TYPES } from './shape-composition-contract';
 import { THEMES, themeVars } from './viewer/themes';
+import { THEMES, themeVars } from './viewer/themes';
 
 const BASE_WIDTH = 1280;
 const BASE_HEIGHT = 720;
@@ -317,15 +318,15 @@ function resolveSlideTheme(deck: ReferenceDeckInput, source: ReferenceSlideInput
 
 function slideBackground(source: ReferenceSlideInput, deck: ReferenceDeckInput): Fill {
   const metadata = isRecord(deck.presentation) ? deck.presentation : {};
-  const rootTheme = isRecord(deck.theme) ? deck.theme : {};
-  const metadataTheme = isRecord(metadata.design) ? metadata.design : isRecord(metadata.theme) ? metadata.theme : {};
   const rootCanvas = isRecord(deck.canvas) ? deck.canvas : {};
   const metadataCanvas = isRecord(metadata.canvas) ? metadata.canvas : {};
   const visual = isRecord(source.visual) ? source.visual : {};
   const data = isRecord(visual.data) ? visual.data : {};
   const canvas = isRecord(data.canvas) ? data.canvas : {};
+  const slideTheme = isRecord(source.theme) ? source.theme : {};
   const explicit = isRecord(source.background) ? source.background.color : source.background;
-  const value = explicit ?? canvas.background ?? metadata.background ?? metadataCanvas.background ?? rootCanvas.background ?? metadataTheme.background ?? rootTheme.background ?? COLORS.background;
+  const value = explicit ?? canvas.background ?? metadataCanvas.background ?? rootCanvas.background
+    ?? slideTheme.background ?? metadata.background ?? COLORS.background;
   return { type: 'solid', color: resolveDesignToken(value, COLORS.background) };
 }
 
@@ -399,13 +400,15 @@ export function parseReferenceSegments(value: unknown): ParsedSegment[] {
 }
 
 function run(segment: ParsedSegment, size: number, color: string): TextRun {
+  const scale = typeof ACTIVE_PRESENTATION_META.fontScale === 'number' && Number.isFinite(ACTIVE_PRESENTATION_META.fontScale)
+    ? Math.max(0.5, Math.min(2, ACTIVE_PRESENTATION_META.fontScale)) : 1;
   return {
     text: segment.text,
     b: segment.bold,
     i: false,
     u: false,
     strike: false,
-    size,
+    size: Math.max(1, size * scale),
     color,
     fonts: FONT,
     ...(segment.highlight ? { highlight: COLORS.highlight } : {}),
@@ -494,12 +497,15 @@ function rectangle(
   stroke: Stroke | null = null,
   name?: string,
 ): ShapeElement {
+  const radiusScale = typeof ACTIVE_PRESENTATION_META.radiusScale === 'number' && Number.isFinite(ACTIVE_PRESENTATION_META.radiusScale)
+    ? Math.max(0.25, Math.min(3, ACTIVE_PRESENTATION_META.radiusScale)) : 1;
+  const scaledRadius = Math.max(0, radius * radiusScale);
   return shape(
     x,
     y,
     w,
     h,
-    radius ? roundedRectPath(w, h, radius) : rectPath(w, h),
+    scaledRadius ? roundedRectPath(w, h, scaledRadius) : rectPath(w, h),
     { type: 'solid', color },
     stroke,
     null,
@@ -1161,14 +1167,17 @@ function renderShapeComposition(
     const h = Math.max(1, (isLinearShape ? Math.abs(rawH) : rawH) || 0);
     const style = isRecord(item.style) ? item.style : {};
     const content = isRecord(item.content) ? item.content : {};
+    const radiusScale = typeof ACTIVE_PRESENTATION_META.radiusScale === 'number' && Number.isFinite(ACTIVE_PRESENTATION_META.radiusScale)
+      ? Math.max(0.25, Math.min(3, ACTIVE_PRESENTATION_META.radiusScale)) : 1;
     const opacity = typeof style.opacity === 'number' ? Math.max(0, Math.min(1, style.opacity)) : 1;
     const fill = style.fill === 'none' ? 'none' : applyElementOpacity(resolveDesignToken(style.fill, COLORS.soft), opacity);
     const strokeColor = applyElementOpacity(resolveDesignToken(style.stroke, COLORS.foreground), opacity);
     const dashValue = Array.isArray(style.lineDash) ? style.lineDash : Array.isArray(style.dash) ? style.dash : null;
     const defaultsToStroke = type !== 'text' && (['line', 'connector', 'arrow', 'bracket', 'arc', 'ring'].includes(type) || style.fill === 'none');
-    const hasStroke = typeof style.stroke === 'string' ? style.stroke !== 'none' : defaultsToStroke;
-    const requestedStrokeWidth = typeof style.strokeWidth === 'number' && Number.isFinite(style.strokeWidth) && style.strokeWidth > 0
-      ? Math.min(24, style.strokeWidth)
+    const zeroWidthStroke = typeof style.strokeWidth === 'number' && style.strokeWidth === 0;
+    const hasStroke = !zeroWidthStroke && (typeof style.stroke === 'string' ? style.stroke !== 'none' : defaultsToStroke);
+    const requestedStrokeWidth = typeof style.strokeWidth === 'number' && Number.isFinite(style.strokeWidth)
+      ? Math.max(0, Math.min(24, style.strokeWidth))
       : null;
     const stroke = hasStroke ? ({
       color: strokeColor,
@@ -1182,7 +1191,7 @@ function renderShapeComposition(
       path = `M ${rx} 0 A ${rx} ${ry} 0 1 0 ${rx} ${h} A ${rx} ${ry} 0 1 0 ${rx} 0 Z`;
       if (type === 'ring') shapeFill = null;
     } else if (type === 'rounded-rectangle' || type === 'pill') {
-      const radius = typeof style.radius === 'number' ? Math.max(0, style.radius) : (type === 'pill' ? h / 2 : Math.min(18, h / 5));
+      const radius = (typeof style.radius === 'number' ? Math.max(0, style.radius) : (type === 'pill' ? h / 2 : Math.min(18, h / 5))) * radiusScale;
       path = roundedRectPath(w, h, radius);
     } else if (type === 'triangle') {
       path = `M ${w / 2} 0 L ${w} ${h} L 0 ${h} Z`;
@@ -1226,9 +1235,10 @@ function renderShapeComposition(
     const rawText = typeof content.text === 'string' ? content.text : typeof content.value === 'string' ? content.value : typeof item.text === 'string' ? item.text : '';
     const isText = type === 'text' || rawText.length > 0;
     const metadata = ACTIVE_PRESENTATION_META;
-    const scale = typeof style.fontScale === 'number' && Number.isFinite(style.fontScale) ? style.fontScale : typeof metadata.fontScale === 'number' && Number.isFinite(metadata.fontScale) ? metadata.fontScale : 1;
+    const scale = typeof style.fontScale === 'number' && Number.isFinite(style.fontScale) ? Math.max(0.25, Math.min(4, style.fontScale)) : 1;
     const rawFontSize = typeof style.fontSize === 'number' && Number.isFinite(style.fontSize) ? style.fontSize : 16;
-    const fontSize = Math.max(6, (rawFontSize > 0 && rawFontSize <= 1 ? rawFontSize * ACTIVE_HEIGHT : rawFontSize) * scale);
+    // fontSize is measured in CSS pixels; fontScale is the multiplicative control.
+    const fontSize = Math.max(6, Math.min(512, rawFontSize * scale));
     const text = isText ? textBody(rawText, fontSize,
       applyElementOpacity(resolveDesignToken(style.color, COLORS.foreground), opacity),
       style.textAlign === 'left' || style.textAlign === 'center' ? style.textAlign : 'right',
@@ -1266,8 +1276,9 @@ function contentSlide(source: ReferenceSlideInput, deck: ReferenceDeckInput): Sl
   const visual = isRecord(source.visual) ? source.visual : {};
   const data = isRecord(visual.data) ? visual.data : {};
   const canvas = isRecord(data.canvas) ? data.canvas : {};
-  const layoutConfig = isRecord(source.layoutConfig) ? source.layoutConfig : {};
   const metadata = isRecord(deck.presentation) ? deck.presentation : {};
+  const layoutDefaults = isRecord(metadata.layoutDefaults) ? metadata.layoutDefaults : {};
+  const layoutConfig = { ...layoutDefaults, ...(isRecord(source.layoutConfig) ? source.layoutConfig : {}) };
   const metadataCanvas = isRecord(metadata.canvas) ? metadata.canvas : {};
   const rootCanvas = isRecord(deck.canvas) ? deck.canvas : {};
   const fullscreen =
@@ -1296,7 +1307,7 @@ function contentSlide(source: ReferenceSlideInput, deck: ReferenceDeckInput): Sl
     const side = layoutConfig.visualSide === 'right' || ['visual-right','image-led-right'].includes(layout) ? 'right' : 'left';
     const padding = typeof layoutConfig.padding === 'number' && Number.isFinite(layoutConfig.padding) ? Math.max(0, layoutConfig.padding) : 64;
     const gap = typeof layoutConfig.gap === 'number' && Number.isFinite(layoutConfig.gap) ? Math.max(0, layoutConfig.gap) : 38;
-    const ratio = typeof layoutConfig.visualWidthRatio === 'number' && layoutConfig.visualWidthRatio > .1 && layoutConfig.visualWidthRatio < .9 ? layoutConfig.visualWidthRatio : layout === 'asymmetric-editorial' ? .56 : .48;
+    const ratio = typeof layoutConfig.visualWidthRatio === 'number' && layoutConfig.visualWidthRatio >= .1 && layoutConfig.visualWidthRatio <= .9 ? layoutConfig.visualWidthRatio : layout === 'asymmetric-editorial' ? .56 : .48;
     const available = ACTIVE_WIDTH - padding * 2 - gap;
     const visualW = available * ratio;
     const bodyW = available - visualW;
