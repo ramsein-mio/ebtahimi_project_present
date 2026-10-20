@@ -304,6 +304,7 @@ export function normalizeFlexiblePresentation(value: unknown): unknown {
   }
   const root = value as RecordValue & { slides: unknown[] };
   const rawSlides = root.slides.map((slide, index) => normalizeSlide(slide, index));
+  const rawMeta = isRecord(root.presentation) ? root.presentation : {};
   const ids = new Set<string>();
   rawSlides.forEach((slide, index) => {
     let id = textValue(slide.id, `slide-${index + 1}`);
@@ -311,7 +312,6 @@ export function normalizeFlexiblePresentation(value: unknown): unknown {
     ids.add(id);
     slide.id = id;
   });
-  const rawMeta = isRecord(value.presentation) ? value.presentation : {};
   const total = rawSlides.reduce((sum, slide) => sum + safeNumber(slide.durationSeconds, 45, 0.001), 0);
   const metadata: RecordValue = {
     ...rawMeta,
