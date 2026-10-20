@@ -391,11 +391,12 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
               const style = element.style;
               exactKeys(style, [...COMPOSITION_STYLE_KEYS], ep + '.style', errors, [...COMPOSITION_STYLE_KEYS]);
               for (const key of ['fill', 'stroke', 'color']) {
-                if (key in style && style[key] != null && typeof style[key] !== 'string') {
-                  errors.push({ path: ep + '.style.' + key, message: 'Color values must be CSS color strings or supported theme tokens.', expected: 'string', actual: actualType(style[key]), severity: 'error' });
+                if (key in style && typeof style[key] !== 'string') {
+                  errors.push({ path: ep + '.style.' + key, message: 'Color values must be explicit CSS color strings, supported theme tokens, or the string "none".', expected: 'string', actual: actualType(style[key]), severity: 'error' });
                 }
               }
-              for (const key of ['fontSize','fontScale']) if (key in style && style[key] != null && (typeof style[key] !== 'number' || !Number.isFinite(style[key]) || Number(style[key]) <= 0 || Number(style[key]) > (key === 'fontSize' ? 512 : 8))) issue(errors, ep + '.style.' + key, 'Typography values must be positive finite values within the supported bound; fontSize is measured in CSS pixels.', key === 'fontSize' ? 'number in (0, 512] pixels' : 'number in (0, 8]', style[key]);
+              if ('fontSize' in style && style.fontSize != null && (typeof style.fontSize !== 'number' || !Number.isFinite(style.fontSize) || style.fontSize < 6 || style.fontSize > 512)) issue(errors, ep + '.style.fontSize', 'fontSize is measured in CSS pixels.', 'number in [6, 512] pixels', style.fontSize);
+              if ('fontScale' in style && style.fontScale != null && (typeof style.fontScale !== 'number' || !Number.isFinite(style.fontScale) || style.fontScale < 0.25 || style.fontScale > 4)) issue(errors, ep + '.style.fontScale', 'fontScale is a bounded multiplier.', 'number in [0.25, 4]', style.fontScale);
               for (const key of ['strokeWidth','radius']) if (key in style && style[key] != null && (typeof style[key] !== 'number' || !Number.isFinite(style[key]) || Number(style[key]) < 0 || Number(style[key]) > (key === 'strokeWidth' ? 24 : 4096))) issue(errors, ep + '.style.' + key, 'Stroke width may be zero to disable the outline; radius must be non-negative.', key === 'strokeWidth' ? 'number in [0, 24]' : 'number in [0, 4096]', style[key]);
               if ('textAlign' in style && style.textAlign != null && !['left', 'center', 'right'].includes(String(style.textAlign))) {
                 errors.push({ path: ep + '.style.textAlign', message: 'Unsupported text alignment.', expected: 'left | center | right', actual: String(style.textAlign), severity: 'error' });
