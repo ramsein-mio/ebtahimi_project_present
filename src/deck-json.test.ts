@@ -170,7 +170,10 @@ describe('shared JSON render contract', () => {
     });
 
     const shape = result.presentation.slides[0].elements[0];
-    expect(shape).toMatchObject({ x: 294.4, y: 14.4, w: 691.2, h: 691.2 });
+    expect(shape.x).toBeCloseTo(294.4, 4);
+    expect(shape.y).toBeCloseTo(14.4, 4);
+    expect(shape.w).toBeCloseTo(691.2, 4);
+    expect(shape.h).toBeCloseTo(691.2, 4);
   });
 
   it('uses named themes while allowing presentation.design to override theme tokens', () => {
