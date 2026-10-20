@@ -436,7 +436,15 @@ export function validateCanonicalPresentation(value: unknown): CanonicalValidati
       if (!isRecord(visual.data)) errors.push({ path: p + '.visual.data', message: 'Visual data must be an object.', expected: 'object', actual: actualType(visual.data), severity: 'error' });
       else if (typeof visual.type === 'string' && supportedVisuals.includes(visual.type)) validateVisualDataContract(visual.type, visual.data, p + '.visual.data', errors);
       const shapeCanvas = isRecord(visual.data) && isRecord(visual.data.canvas) ? visual.data.canvas : {};
-      const requiresComposition = ['graphic-fullscreen','full-bleed','shape-composition'].includes(String(slide.layout)) || isRecord(slide.layoutConfig) && slide.layoutConfig.fullscreen === true || shapeCanvas.fullscreen === true;
+      const metaCanvas = isRecord(meta) && isRecord(meta.canvas) ? meta.canvas : {};
+      const metaLayoutDefaults = isRecord(meta) && isRecord(meta.layoutDefaults) ? meta.layoutDefaults : {};
+      const requiresComposition =
+        ['graphic-fullscreen','full-bleed','shape-composition'].includes(String(slide.layout))
+        || isRecord(slide.layoutConfig) && slide.layoutConfig.fullscreen === true
+        || metaLayoutDefaults.fullscreen === true
+        || shapeCanvas.fullscreen === true
+        || metaCanvas.fullscreen === true
+        || metaCanvas.mode === 'fullscreen';
       if (requiresComposition && visual.type !== 'shape-composition') errors.push({ path: p + '.layout', message: 'Fullscreen rendering requires a shape-composition visual; this renderer cannot fill the canvas from another visual type.', expected: 'visual.type = shape-composition', actual: String(visual.type), severity: 'error' });
       if (slide.layout === 'title' && typeof visual.type === 'string' && visual.type !== 'none' && supportedVisuals.includes(visual.type)) errors.push({ path: p + '.visual.type', message: 'The title layout does not render side visuals; use layout content or a fullscreen shape composition.', expected: 'none for title layout', actual: visual.type, severity: 'error' });
       expectNullableString(visual.caption, p + '.visual.caption', errors);
