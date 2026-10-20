@@ -246,7 +246,7 @@ describe('shared JSON render contract', () => {
     const line = result.presentation.slides[0].elements.find((element) => element.name === 'line-series-1');
     expect(line?.kind).toBe('shape');
     const path = line && line.kind === 'shape' ? String((line as unknown as Record<string, unknown>).path ?? '') : '';
-    const coordinates = path.match(/^M\\s*([\\d.]+)\\s+([\\d.]+)\\s+L\\s*([\\d.]+)\\s+([\\d.]+)/);
+    const coordinates = path.match(/^M\s*([\d.]+)\s+([\d.]+)\s+L\s*([\d.]+)\s+([\d.]+)/);
     expect(coordinates).not.toBeNull();
     if (coordinates && line && line.kind === 'shape') {
       const firstX = Number(coordinates[1]);
