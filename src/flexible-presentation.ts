@@ -269,7 +269,7 @@ export function normalizeFlexiblePresentation(value: unknown): unknown {
     });
   }
   if (!Array.isArray(value.slides)) {
-    const rawMeta = isRecord(value.presentation) ? value.presentation : {};
+    const rawMeta = isRecord(root.presentation) ? root.presentation : {};
     const items = Array.isArray(value.items) ? value.items
       : Array.isArray(value.sections) ? value.sections
       : Array.isArray(value.data) ? value.data
@@ -290,8 +290,8 @@ export function normalizeFlexiblePresentation(value: unknown): unknown {
       recapSlides: Array.isArray(value.recapSlides) ? value.recapSlides : [],
     };
   }
-  const deck = value as RecordValue & { slides: unknown[] };
-  const rawSlides = deck.slides.map((slide, index) => normalizeSlide(slide, index));
+  const root = value as RecordValue & { slides: unknown[] };
+  const rawSlides = root.slides.map((slide, index) => normalizeSlide(slide, index));
   const ids = new Set<string>();
   rawSlides.forEach((slide, index) => {
     let id = textValue(slide.id, `slide-${index + 1}`);
@@ -312,18 +312,18 @@ export function normalizeFlexiblePresentation(value: unknown): unknown {
     ...(rawMeta.radiusScale != null && !(typeof rawMeta.radiusScale === 'number' && Number.isFinite(rawMeta.radiusScale) && rawMeta.radiusScale > 0) ? { radiusScale: 1 } : {}),
     ...(rawMeta.shadowStyle != null && !['none','soft','medium','strong'].includes(String(rawMeta.shadowStyle)) ? { shadowStyle: 'soft' } : {}),
     ...(rawMeta.contrast != null && !['normal','high'].includes(String(rawMeta.contrast)) ? { contrast: 'normal' } : {}),
-    ...(rawMeta.palette != null && (!Array.isArray(rawMeta.palette) || rawMeta.palette.some((color) => typeof color !== 'string')) ? { palette: Array.isArray(rawMeta.palette) ? rawMeta.palette.map((color) => textValue(color, '#64748b')) : [] } : {}),
+    ...(rawMeta.palette != null && (!Array.isArray(rawMeta.palette) || (rawMeta.palette as unknown[]).some((color: unknown) => typeof color !== 'string')) ? { palette: Array.isArray(rawMeta.palette) ? (rawMeta.palette as unknown[]).map((color: unknown) => textValue(color, '#64748b')) : [] } : {}),
     ...(rawMeta.semanticColors != null && !isRecord(rawMeta.semanticColors) ? { semanticColors: {} } : {}),
     ...(rawMeta.semanticColors != null && isRecord(rawMeta.semanticColors) ? { semanticColors: Object.fromEntries(Object.entries(rawMeta.semanticColors).map(([key, color]) => [key, typeof color === 'string' ? color : isRecord(color) && typeof color.color === 'string' ? color.color : '#64748b'])) } : {}),
     ...(rawMeta.layoutDefaults != null && !isRecord(rawMeta.layoutDefaults) ? { layoutDefaults: {} } : {}),
     ...(rawMeta.assets != null && !Array.isArray(rawMeta.assets) ? { assets: [] } : {}),
-    title: textValue(rawMeta.title ?? value.title, 'ارائه') || 'ارائه',
+    title: textValue(rawMeta.title ?? root.title, 'ارائه') || 'ارائه',
     subtitle: rawMeta.subtitle == null || rawMeta.subtitle === '' ? null : textValue(rawMeta.subtitle),
     language: textValue(rawMeta.language, 'fa'),
     theme: textValue(isRecord(rawMeta.theme) ? rawMeta.theme.name ?? rawMeta.theme.id : rawMeta.theme, 'modern'),
     targetAudience: textValue(rawMeta.targetAudience, 'مخاطبان عمومی'),
     estimatedTotalDurationSeconds: safeNumber(rawMeta.estimatedTotalDurationSeconds, Math.max(1, total), 1),
-    learningObjectives: Array.isArray(rawMeta.learningObjectives) ? rawMeta.learningObjectives.map((item) => textValue(item)) : [],
+    learningObjectives: Array.isArray(rawMeta.learningObjectives) ? (rawMeta.learningObjectives as unknown[]).map((item: unknown) => textValue(item)) : [],
     coverageChecklist: normalizeChecklist(rawMeta.coverageChecklist),
     teachingRoadmap: normalizeRoadmap(rawMeta.teachingRoadmap),
   };
@@ -336,7 +336,7 @@ export function normalizeFlexiblePresentation(value: unknown): unknown {
     ...item,
     slideIds: (item.slideIds as string[]).filter((id) => slideIds.has(id)),
   }));
-  const recap = Array.isArray(value.recapSlides) ? value.recapSlides : [];
+  const recap: unknown[] = Array.isArray(root.recapSlides) ? root.recapSlides as unknown[] : [];
   const recapSlides = recap.map((entry) => {
     if (!isRecord(entry)) return { afterSlideId: textValue(rawSlides[0]?.id), type: 'retrieval', prompt: textValue(entry) };
     const requestedId = textValue(entry.afterSlideId);
@@ -347,5 +347,5 @@ export function normalizeFlexiblePresentation(value: unknown): unknown {
       prompt: textValue(entry.prompt ?? entry.question ?? entry.text, 'نکتهٔ اصلی این بخش چه بود؟'),
     };
   });
-  return { ...value, presentation: metadata, slides: rawSlides, recapSlides };
+  return { ...root, presentation: metadata, slides: rawSlides, recapSlides };
 }
