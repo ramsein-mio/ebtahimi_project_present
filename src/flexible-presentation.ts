@@ -281,7 +281,7 @@ export function normalizeFlexiblePresentation(value: unknown): unknown {
     });
   }
   if (!Array.isArray(value.slides)) {
-    const rawMeta = isRecord(root.presentation) ? root.presentation : {};
+    const rawMeta = isRecord(value.presentation) ? value.presentation : {};
     const items = Array.isArray(value.items) ? value.items
       : Array.isArray(value.sections) ? value.sections
       : Array.isArray(value.data) ? value.data
