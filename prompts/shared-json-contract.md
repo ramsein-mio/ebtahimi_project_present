@@ -15,7 +15,7 @@ Do not put `theme`, `canvas`, `mode`, or other extra keys at the root. Root-leve
 - `title`: non-empty string
 - `subtitle`: string or null
 - `language`: string
-- `theme`: descriptive theme name (string)
+- `theme`: one registered theme ID: `light`, `dark`, `ocean`, `forest`, `sunset`, `lavender`, `rose`, `sepia`, `midnight`, or `neon`. Do not use a descriptive label such as `editorial-dark` here. Put the descriptive art-direction name in `presentation.design` only if needed as documented metadata.
 - `targetAudience`: string
 - `estimatedTotalDurationSeconds`: positive finite number
 - `learningObjectives`: string array
@@ -43,9 +43,12 @@ Use `presentation.design` (or an optional slide-level `theme`) for render stylin
   "fontFamily": ["Vazirmatn", "Tahoma", "Arial"]
 }
 ```
-Color values must be non-empty CSS color strings or supported `theme.*` tokens; palette must contain 1–12 such strings; fontFamily may be a non-empty string or non-empty string array. `fontSize` (when supplied) is a bounded pixel-size default for text shapes in a composition; `fontScale` and `radiusScale` are positive scale factors up to 4. `contrast` may be `normal` or `high`; `direction` may be `ltr`, `rtl`, or `auto`. Optional theme properties may be omitted. Prefer a coherent 3–6 color palette with readable contrast. If the user supplies no theme, choose a consistent default.
+Color values must be non-empty CSS color strings or supported `theme.*` tokens; palette must contain 1–12 such strings; fontFamily may be a non-empty string or non-empty string array. `fontSize` (when supplied) is a bounded pixel-size default for text shapes in a composition; `fontScale` and `radiusScale` are positive scale factors up to 4. `contrast` may be `normal` or `high`; `direction` may be `ltr`, `rtl`, or `auto`. Optional theme properties may be omitted by the schema, but generation prompts should still explicitly set `presentation.design` to preserve the intended art direction. Prefer a coherent 3–6 color palette with readable contrast. If the user supplies no theme, choose one registered ID from the list above and encode a coordinated design.
 
-Theme tokens supported in shape styles include `theme.background`, `theme.foreground` / `theme.text`, `theme.muted`, `theme.surface` / `theme.soft`, `theme.border` / `theme.soft2`, `theme.highlight`, `theme.primary`, `theme.secondary`, `theme.accent`, and `theme.palette.N` (zero-based palette index). The literal `"theme"` is supported as a shape-composition canvas background and resolves to the active theme background.
+Theme tokens supported in shape styles include `theme.background`, `theme.foreground` / `theme.text`, `theme.muted`, `theme.surface` / `theme.soft`, `theme.border` / `theme.soft2`, `theme.highlight`, `theme.primary`, `theme.secondary`, `theme.accent`, and `theme.palette.N` (zero-based palette index). The literal `"theme"` is supported as a shape-composition canvas background and resolves to the active theme background. The renderer resolves color tokens, but it does not automatically detect the fill behind each arbitrary text element and switch its color for contrast. When text overlays or shares a shape with a custom fill, assign an explicit readable `style.color` based on that actual fill.
+
+## Registered theme IDs
+The renderer's registered theme IDs are exactly: `light`, `dark`, `ocean`, `forest`, `sunset`, `lavender`, `rose`, `sepia`, `midnight`, `neon`. `presentation.theme` must use one of these IDs to activate a preset. An unknown string such as `editorial-dark` is not a registered preset and will not activate that theme; use a valid ID and express custom colors through `presentation.design`.
 
 ## Canvas and backgrounds
 Canvas settings may be placed in `presentation.canvas` or `visual.data.canvas` (for shape compositions). Supported keys are `width`, `height`, `aspectRatio` (for example `"16:9"`), `background`, `fullscreen`, `mode` (`standard` or `fullscreen`), and `safeArea` (`top`, `right`, `bottom`, `left` numeric insets). Use integer dimensions from 1 to 8192. If both width and height are supplied, they define the ratio; otherwise `aspectRatio` defines the shape-composition viewport ratio. Default slide canvas is 1280×720. Insets are non-negative pixel values in the specified canvas coordinate system: horizontal edges are bounded to 25% of canvas width and vertical edges to 25% of canvas height. Insets are scaled to the fitted viewport; the renderer clamps defensively.
