@@ -190,6 +190,25 @@ function insetFrame(frame: { x: number; y: number; w: number; h: number }, rawIn
   };
 }
 
+function scaledCanvasInsets(frame: { x: number; y: number; w: number; h: number }, canvas: Record<string, unknown>): Record<string, unknown> | undefined {
+  if (!isRecord(canvas.safeArea)) return undefined;
+  const hasRatio = typeof canvas.aspectRatio === 'string' && /^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/.test(canvas.aspectRatio);
+  const ratio = hasRatio ? Number(canvas.aspectRatio!.toString().split(':')[0]) / Number(canvas.aspectRatio!.toString().split(':')[1]) : null;
+  const hasWidth = typeof canvas.width === 'number' && Number.isFinite(canvas.width) && canvas.width > 0;
+  const hasHeight = typeof canvas.height === 'number' && Number.isFinite(canvas.height) && canvas.height > 0;
+  if (!hasRatio && !(hasWidth && hasHeight)) return canvas.safeArea;
+  const baseWidth = hasWidth ? Number(canvas.width) : hasHeight && ratio ? Number(canvas.height) * ratio : 1280;
+  const baseHeight = hasHeight ? Number(canvas.height) : ratio ? baseWidth / ratio : 720;
+  const scaleX = frame.w / baseWidth;
+  const scaleY = frame.h / baseHeight;
+  return {
+    ...(typeof canvas.safeArea.top === 'number' ? { top: canvas.safeArea.top * scaleY } : {}),
+    ...(typeof canvas.safeArea.bottom === 'number' ? { bottom: canvas.safeArea.bottom * scaleY } : {}),
+    ...(typeof canvas.safeArea.left === 'number' ? { left: canvas.safeArea.left * scaleX } : {}),
+    ...(typeof canvas.safeArea.right === 'number' ? { right: canvas.safeArea.right * scaleX } : {}),
+  };
+}
+
 function inferSlideDirection(source: ReferenceSlideInput, metadata: Record<string, unknown>): 'ltr' | 'rtl' {
   const sourceText = [
     source.title, source.subtitle,
@@ -1251,7 +1270,7 @@ function renderShapeComposition(
   if (!Array.isArray(data.elements)) return;
   const compositionCanvas = isRecord(data.canvas) ? data.canvas : {};
   const compositionFrame = fitCompositionCanvas(frame, compositionCanvas);
-  frame = insetFrame(compositionFrame, compositionCanvas.safeArea);
+  frame = insetFrame(compositionFrame, scaledCanvasInsets(compositionFrame, compositionCanvas));
   if (typeof compositionCanvas.background === 'string') {
     const compositionBackground = resolveDesignToken(compositionCanvas.background, COLORS.background);
     if (compositionBackground !== COLORS.background) {
