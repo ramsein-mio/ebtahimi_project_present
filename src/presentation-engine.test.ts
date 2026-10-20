@@ -62,8 +62,11 @@ describe('چرخهٔ JSON تا ذخیره و بازگشایی', () => {
   it('visualهای قرارداد مرجع، از جمله line-chart، را به عناصر قابل‌رندر تبدیل می‌کند', () => {
     const visuals = [
       { type: 'icon-list', data: { items: [{ icon: '✓', label: 'یک' }] } },
-      { type: 'bar-chart', data: { series: [{ values: [{ label: 'یک', value: 10 }] }] } },
-      { type: 'line-chart', data: { xAxisLabel: 'زمان', yAxisLabel: 'مقدار', series: [{ name: 'روند', points: [{ x: '۱', y: 10 }, { x: '۲', y: 18 }] }] } },
+      { type: 'bar-chart', data: { unit: '%', series: [
+        { name: 'سری اول', values: [{ label: 'یک', value: 10 }, { label: 'دو', value: -5 }] },
+        { name: 'سری دوم', values: [{ label: 'یک', value: 14 }, { label: 'دو', value: 7 }] },
+      ] } },
+      { type: 'line-chart', data: { xAxisLabel: 'زمان', yAxisLabel: 'مقدار', series: [{ name: 'روند', points: [{ x: 0, y: -4 }, { x: 20, y: 10 }, { x: 100, y: 18 }] }] } },
       { type: 'pie-chart', data: { slices: [{ label: 'یک', value: 100 }] } },
       { type: 'comparison-grid', data: { columns: ['الف'], rows: [['عنوان::مقدار']] } },
       { type: 'table', data: { headers: ['الف'], rows: [['مقدار']] } },
@@ -83,6 +86,36 @@ describe('چرخهٔ JSON تا ذخیره و بازگشایی', () => {
       expect(slide.elements.length).toBeGreaterThan(5);
     });
     expect(result.presentation?.slides[2].elements.some((element) => element.name === 'line-series-1')).toBe(true);
+    expect(result.presentation?.slides[1].elements.some((element) => element.name === 'bar-2-2')).toBe(true);
+
+    const lineSlide = result.presentation?.slides[2];
+    const firstPoint = lineSlide?.elements.find((element) => element.kind === 'shape' && element.name === 'line-point-1-1');
+    const secondPoint = lineSlide?.elements.find((element) => element.kind === 'shape' && element.name === 'line-point-1-2');
+    const thirdPoint = lineSlide?.elements.find((element) => element.kind === 'shape' && element.name === 'line-point-1-3');
+    expect(firstPoint && secondPoint && thirdPoint).toBeTruthy();
+    if (firstPoint?.kind === 'shape' && secondPoint?.kind === 'shape' && thirdPoint?.kind === 'shape') {
+      expect(firstPoint.x).toBeLessThan(secondPoint.x);
+      expect(secondPoint.x).toBeLessThan(thirdPoint.x);
+    }
+  });
+
+  it('شناسهٔ تم و تنظیمات design را به پس‌زمینه و رنگ متن واقعی متصل می‌کند', () => {
+    const result = validatePresentationJson(JSON.stringify({
+      presentation: {
+        title: 'Theme order',
+        theme: 'midnight',
+        design: { background: '#112233', foreground: '#fefefe', palette: ['#ffcc00', '#00aaff'] },
+      },
+      slides: [{ order: 1, layout: 'title', title: 'تم واقعی' }],
+    }));
+    expect(result.error).toBeNull();
+    expect(result.presentation?.slides[0].background).toEqual({ type: 'solid', color: '#112233' });
+    const title = result.presentation?.slides[0].elements.find((element) => element.kind === 'shape' && element.name === 'deck-title');
+    if (title?.kind === 'shape' && title.text) {
+      expect(title.text.paragraphs[0].runs[0].color).toBe('#fefefe');
+    } else {
+      throw new Error('عنوان تم‌دار رندر نشد');
+    }
   });
 
   it('ویرایش متن را در projection ذخیره می‌کند و پس از بازگشایی نگه می‌دارد', () => {
