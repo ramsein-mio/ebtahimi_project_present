@@ -192,8 +192,8 @@ function insetFrame(frame: { x: number; y: number; w: number; h: number }, rawIn
 
 function scaledCanvasInsets(frame: { x: number; y: number; w: number; h: number }, canvas: Record<string, unknown>): Record<string, unknown> | undefined {
   if (!isRecord(canvas.safeArea)) return undefined;
-  const hasRatio = typeof canvas.aspectRatio === 'string' && /^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/.test(canvas.aspectRatio);
-  const ratio = hasRatio ? Number(canvas.aspectRatio!.toString().split(':')[0]) / Number(canvas.aspectRatio!.toString().split(':')[1]) : null;
+  const ratioMatch = typeof canvas.aspectRatio === 'string' ? canvas.aspectRatio.match(/^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/) : null;
+  const ratio = ratioMatch && Number(ratioMatch[2]) > 0 && Number(ratioMatch[1]) > 0 ? Number(ratioMatch[1]) / Number(ratioMatch[2]) : null;
   const hasWidth = typeof canvas.width === 'number' && Number.isFinite(canvas.width) && canvas.width > 0;
   const hasHeight = typeof canvas.height === 'number' && Number.isFinite(canvas.height) && canvas.height > 0;
   if (!hasRatio && !(hasWidth && hasHeight)) return canvas.safeArea;
