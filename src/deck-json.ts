@@ -963,7 +963,8 @@ function renderBarChart(
   const span = max - min;
   const valueWidth = Math.min(62, Math.max(44, area.w * 0.16));
   const labelWidth = Math.min(82, Math.max(52, area.w * 0.2));
-  const plotX = area.x + valueWidth;
+  const rtl = isRtlLayout();
+  const plotX = area.x + (rtl ? valueWidth : labelWidth);
   const plotW = Math.max(24, area.w - valueWidth - labelWidth);
   const zeroX = plotX + ((0 - min) / span) * plotW;
   const groupH = area.h / categories.length;
@@ -980,7 +981,8 @@ function renderBarChart(
   }
   categories.forEach((category, categoryIndex) => {
     const groupY = area.y + categoryIndex * groupH;
-    elements.push(textBox(plotX + plotW + 3, groupY, labelWidth - 3, Math.max(20, groupH * .35), category.label, 12, COLORS.foreground, 'right', true));
+    const categoryX = rtl ? plotX + plotW + 3 : area.x;
+    elements.push(textBox(categoryX, groupY, labelWidth - 3, Math.max(20, groupH * .35), category.label, 12, COLORS.foreground, rtl ? 'right' : 'left', true));
     if (categoryIndex > 0) elements.push(rectangle(plotX, groupY, plotW, 1, COLORS.soft2, 0));
     const innerY = groupY + Math.max(18, groupH * .34);
     const availableH = Math.max(4, groupH - Math.max(18, groupH * .34) - 2);
@@ -999,7 +1001,8 @@ function renderBarChart(
       const color = resolveDesignToken(point.color ?? colorFallback, COLORS.palette[seriesIndex % COLORS.palette.length]);
       elements.push(rectangle(plotX, y + barH / 2 - 1, plotW, 2, COLORS.soft, 1));
       elements.push(rectangle(x, y, width, barH, color, Math.min(4, barH / 2), null, `bar-${seriesIndex + 1}-${categoryIndex + 1}`));
-      elements.push(textBox(area.x, y - 1, Math.max(40, valueWidth - 6), barH + 2, formatChartValue(value, unit), 10, COLORS.foreground, 'left', true));
+      const valueX = rtl ? area.x : plotX + plotW + 4;
+      elements.push(textBox(valueX, y - 1, Math.max(40, valueWidth - 6), barH + 2, formatChartValue(value, unit), 10, COLORS.foreground, rtl ? 'left' : 'right', true));
     });
   });
   // Draw a visible zero baseline even when all values share one sign.
@@ -1041,9 +1044,14 @@ function renderLineChart(
   const maxX = allX.length ? Math.max(...allX) : 1;
   const xSpan = maxX - minX;
   const longest = Math.max(...parsed.map((item) => item.points.length));
+  const rtl = isRtlLayout();
   const xFor = (point: Record<string, unknown>, index: number, count: number) => {
-    if (numericX) return area.x + (xSpan === 0 ? area.w / 2 : (Number(point.x) - minX) / xSpan * area.w);
-    return area.x + (count <= 1 ? area.w / 2 : index * area.w / (count - 1));
+    if (numericX) {
+      const progress = xSpan === 0 ? 0.5 : (Number(point.x) - minX) / xSpan;
+      return area.x + (rtl ? 1 - progress : progress) * area.w;
+    }
+    const progress = count <= 1 ? 0.5 : index / (count - 1);
+    return area.x + (rtl ? 1 - progress : progress) * area.w;
   };
   const yFor = (value: number) => area.y + area.h - (value - minValue) / valueSpan * area.h;
   for (let index = 0; index <= 4; index += 1) {
@@ -1074,9 +1082,16 @@ function renderLineChart(
   if (data.xAxisLabel) elements.push(textBox(area.x,area.y+area.h+28,area.w,22,data.xAxisLabel,10,COLORS.muted,'center'));
   if (data.yAxisLabel) elements.push(textBox(frame.x+4,frame.y+8,120,22,data.yAxisLabel,10,COLORS.muted,'left'));
   if (parsed.length>1) parsed.forEach((item,index)=>{
-    const x=frame.x+frame.w-28-index*124;
-    elements.push(rectangle(x-10,frame.y+25,10,10,item.color||COLORS.palette[index%COLORS.palette.length],5));
-    elements.push(textBox(x-112,frame.y+17,96,26,item.name||`Series ${index+1}`,10,COLORS.foreground,'right'));
+    const color=item.color||COLORS.palette[index%COLORS.palette.length];
+    if (rtl) {
+      const x=frame.x+frame.w-28-index*124;
+      elements.push(rectangle(x-10,frame.y+25,10,10,color,5));
+      elements.push(textBox(x-112,frame.y+17,96,26,item.name||`Series ${index+1}`,10,COLORS.foreground,'right'));
+    } else {
+      const x=frame.x+18+index*124;
+      elements.push(rectangle(x,frame.y+25,10,10,color,5));
+      elements.push(textBox(x+15,frame.y+17,96,26,item.name||`Series ${index+1}`,10,COLORS.foreground,'left'));
+    }
   });
 }
 
@@ -1108,7 +1123,8 @@ function renderPieChart(
   const captionSpace = visualCaption(visual.caption, elements, frame);
   const contentH = frame.h - captionSpace;
   const size = Math.max(80, Math.min(270, contentH - 42, frame.w * .54));
-  const boxX = frame.x + 28;
+  const rtl = isRtlLayout();
+  const boxX = rtl ? frame.x + frame.w - 28 - size : frame.x + 28;
   const boxY = frame.y + 18;
   const cx = size / 2, cy = size / 2;
   const outer = size * .4, inner = size * .24;
@@ -1122,8 +1138,8 @@ function renderPieChart(
     elements.push(shape(boxX,boxY,size,size,donutPath(cx,cy,outer,inner,angle,next),{type:'solid',color:resolveDesignToken(item.color,COLORS.palette[index%COLORS.palette.length])},{color:COLORS.background,width:2,dash:null},null,`pie-slice-${index+1}`));
     angle=next;
   });
-  const legendX=boxX+size+10;
-  const legendW=frame.x+frame.w-22-legendX;
+  const legendX=rtl ? frame.x + 22 : boxX + size + 10;
+  const legendW=rtl ? Math.max(20, boxX - legendX - 10) : Math.max(20, frame.x + frame.w - 22 - legendX);
   const rowHeight=Math.min(48,(contentH-36)/slices.length);
   slices.forEach((item,index)=>{
     const y=frame.y+25+rowHeight*index;
@@ -1153,8 +1169,10 @@ function renderGrid(
   const colW = table.w / headers.length;
   const rowH = table.h / Math.max(1, rows.length + 1);
   const cellStroke = { color: COLORS.soft2, width: 1, dash: null } satisfies Stroke;
+  const rtl = isRtlLayout();
   headers.forEach((header, index) => {
-    const x = table.x + (headers.length - 1 - index) * colW;
+    const visualIndex = rtl ? headers.length - 1 - index : index;
+    const x = table.x + visualIndex * colW;
     elements.push(shape(
       x, table.y, colW, rowH, rectPath(colW, rowH),
       { type: 'solid', color: COLORS.foreground },
@@ -1165,7 +1183,8 @@ function renderGrid(
   });
   rows.forEach((row, rowIndex) => {
     headers.forEach((_header, columnIndex) => {
-      const x = table.x + (headers.length - 1 - columnIndex) * colW;
+      const visualIndex = rtl ? headers.length - 1 - columnIndex : columnIndex;
+      const x = table.x + visualIndex * colW;
       const y = table.y + (rowIndex + 1) * rowH;
       const cell = row[columnIndex];
       const raw = stringValue(cell);
