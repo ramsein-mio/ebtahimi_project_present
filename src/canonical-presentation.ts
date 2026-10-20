@@ -114,6 +114,8 @@ function validateRenderTheme(value: unknown, path: string, errors: ValidationIss
 }
 function validateRenderCanvas(value: unknown, path: string, errors: ValidationIssue[]) {
   if (!isRecord(value)) { issue(errors, path, 'Canvas must be an object.', 'canvas object', value); return; }
+  const canvasKeys = ['width','height','aspectRatio','background','fullscreen','mode','safeArea'];
+  exactKeys(value, canvasKeys, path, errors, canvasKeys);
   for (const key of ['width','height']) if (key in value && (typeof value[key] !== 'number' || !Number.isInteger(value[key]) || !Number.isFinite(value[key]) || Number(value[key]) < 1 || Number(value[key]) > 8192)) issue(errors, path + '.' + key, 'Canvas dimension must be a supported positive integer.', 'integer in [1, 8192]', value[key]);
   if ('aspectRatio' in value) {
     const match = typeof value.aspectRatio === 'string' ? value.aspectRatio.match(/^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/) : null;
