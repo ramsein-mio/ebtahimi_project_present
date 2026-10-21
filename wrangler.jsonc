@@ -13,5 +13,11 @@
       "database_name": "pardis-present-db",
       "database_id": "090cc118-565c-4eed-8012-48e90186850d"
     }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "pardis_present_uploads",
+      "bucket_name": "pardis-present-uploads"
+    }
   ]
 }
