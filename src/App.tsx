@@ -13,7 +13,8 @@ import type { Route } from './types';
 function readRoute(): Route {
   const hash = window.location.hash.replace(/^#\/?/, '');
 
-  if (hash === 'new') return { page: 'json' };\n  if (hash === 'admin') return { page: 'admin' };
+  if (hash === 'new') return { page: 'json' };
+  if (hash === 'admin') return { page: 'admin' };
 
   if (hash.startsWith('editor/')) {
     return {
