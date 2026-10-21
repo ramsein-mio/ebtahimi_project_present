@@ -9,6 +9,7 @@ interface UserRow {
   display_name: string;
   avatar_key: string | null;
   email_verified_at: string | null;
+  role: string;
   created_at: string;
 }
 
@@ -28,6 +29,7 @@ interface SessionUserRow {
   display_name: string;
   avatar_key: string | null;
   email_verified_at: string | null;
+  role: string;
   created_at: string;
 }
 
@@ -272,6 +274,15 @@ function originAllowed(request: Request, url: URL): boolean {
   return origin === null || origin === url.origin;
 }
 
+const SUPER_ADMIN_EMAILS = new Set([
+  'hossein.rmz.j@gmail.com',
+  'hossein.rmz.o@gmail.com',
+]);
+
+function isSuperAdminEmail(email: string): boolean {
+  return SUPER_ADMIN_EMAILS.has(email.trim().toLowerCase());
+}
+
 function publicUser(user: SessionUserRow) {
   return {
     id: user.id,
@@ -279,6 +290,7 @@ function publicUser(user: SessionUserRow) {
     displayName: user.display_name,
     avatarKey: user.avatar_key,
     emailVerified: user.email_verified_at !== null,
+    role: user.role,
     createdAt: user.created_at,
   };
 }
@@ -304,6 +316,7 @@ async function currentUser(
         u.display_name,
         u.avatar_key,
         u.email_verified_at,
+        u.role,
         u.created_at
       FROM sessions s
       JOIN users u ON u.id = s.user_id
@@ -390,12 +403,13 @@ async function register(
         email,
         password_hash,
         display_name,
+        role,
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `)
-    .bind(userId, email, passwordHash, displayName, now, now)
+    .bind(userId, email, passwordHash, displayName, isSuperAdminEmail(email) ? 'super_admin' : 'user', now, now)
     .run();
 
   if ((result.meta?.changes ?? 0) === 0) {
@@ -446,7 +460,7 @@ async function login(
   const user = await env.pardis_present_db
     .prepare(`
       SELECT id, email, password_hash, display_name,
-             avatar_key, email_verified_at, created_at
+             avatar_key, email_verified_at, role, created_at
       FROM users
       WHERE email = ? COLLATE NOCASE
         AND deleted_at IS NULL
@@ -500,6 +514,7 @@ async function login(
     display_name: user.display_name,
     avatar_key: user.avatar_key,
     email_verified_at: user.email_verified_at,
+    role: user.role,
     created_at: user.created_at,
   };
 
