@@ -30,12 +30,12 @@ export function AdminDashboard({currentUser,onBack,onLogout}:{currentUser:AuthUs
   async function changeRole(user:AdminUser,role:'user'|'admin'){if(!window.confirm('نقش '+user.email+' به '+(role==='admin'?'ادمین':'کاربر عادی')+' تغییر کند؟'))return;setBusy(true);setError('');setNotice('');try{await api('/api/admin/users/'+encodeURIComponent(user.id)+'/role',{method:'PUT',body:JSON.stringify({role})});setNotice('نقش کاربر به‌روزرسانی شد.');await load()}catch(e){setError(e instanceof Error?e.message:'تغییر نقش انجام نشد.')}finally{setBusy(false)}}
   return <main className="admin-shell" dir="rtl">
     <aside className="admin-sidebar"><div className="admin-brand"><span>پ</span><div><strong>پردیس</strong><small>کنسول مدیریت</small></div></div>
-      <button className={section==='overview'?'selected':''} onClick={()=>setSection('overview')}><Icon name="grid"/> نمای کلی</button>
-      <button className={section==='users'?'selected':''} onClick={()=>setSection('users')}><Icon name="users"/> مدیریت کاربران</button>
+      <button className={section==='overview'?'selected':''} onClick={()=>setSection('overview')}><Icon name="layout"/> نمای کلی</button>
+      <button className={section==='users'?'selected':''} onClick={()=>setSection('users')}><Icon name="presentation"/> مدیریت کاربران</button>
       <button onClick={onBack}><Icon name="arrow"/> بازگشت به برنامه</button>
-      <div className="admin-sidebar-bottom"><span className="admin-avatar">{currentUser.displayName.slice(0,1)}</span><div><strong>{currentUser.displayName}</strong><small dir="ltr">{currentUser.email}</small><small className="admin-role">{currentUser.role==='super_admin'?'Super Admin':'Administrator'}</small></div><button onClick={onLogout} aria-label="خروج"><Icon name="logout"/></button></div>
+      <div className="admin-sidebar-bottom"><span className="admin-avatar">{currentUser.displayName.slice(0,1)}</span><div><strong>{currentUser.displayName}</strong><small dir="ltr">{currentUser.email}</small><small className="admin-role">{currentUser.role==='super_admin'?'Super Admin':'Administrator'}</small></div><button onClick={onLogout} aria-label="خروج"><Icon name="close"/></button></div>
     </aside>
-    <section className="admin-content"><header className="admin-topbar"><div><small>کنسول / {section==='overview'?'نمای کلی':'کاربران'}</small><h1>{section==='overview'?'داشبورد مدیریت':'مدیریت کاربران'}</h1></div><button className="admin-refresh" onClick={()=>void load()}><Icon name="refresh"/> بروزرسانی</button></header>
+    <section className="admin-content"><header className="admin-topbar"><div><small>کنسول / {section==='overview'?'نمای کلی':'کاربران'}</small><h1>{section==='overview'?'داشبورد مدیریت':'مدیریت کاربران'}</h1></div><button className="admin-refresh" onClick={()=>void load()}><Icon name="restore"/> بروزرسانی</button></header>
     {error&&<div className="admin-alert error">{error}</div>}{notice&&<div className="admin-alert success">{notice}</div>}
     {section==='overview'&&<>{overview?<><div className="admin-metrics">
       <article><span>کل کاربران</span><strong>{overview.users.toLocaleString('fa-IR')}</strong><small>{overview.activeUsers.toLocaleString('fa-IR')} حساب فعال</small></article>
