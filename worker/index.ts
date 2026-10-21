@@ -1014,13 +1014,13 @@ async function getPresentationRequestFile(request: Request, env: Env, id: string
       try {
         if (url.pathname === '/api/presentation-requests' && request.method === 'POST') return await createPresentationRequest(request, env);
         if (url.pathname === '/api/presentation-requests' && request.method === 'GET') return await listUserPresentationRequests(request, env);
-        const requestFileMatch = url.pathname.match(/^\\/api\\/presentation-requests\\/([^/]+)\\/files\\/([^/]+)$/);
+        const requestFileMatch = url.pathname.match(/^\/api\/presentation-requests\/([^/]+)\/files\/([^/]+)$/);
         if (requestFileMatch && request.method === 'GET') {
           let requestId: string;
           try { requestId = decodeURIComponent(requestFileMatch[1]); } catch { return json({ error: 'Invalid request ID.' }, 400); }
           return await getPresentationRequestFile(request, env, requestId, requestFileMatch[2]);
         }
-        const adminRequestMatch = url.pathname.match(/^\\/api\\/admin\\/presentation-requests(?:\\/([^/]+))?$/);
+        const adminRequestMatch = url.pathname.match(/^\/api\/admin\/presentation-requests(?:\/([^/]+))?$/);
         if (adminRequestMatch && request.method === 'GET') {
           if (!adminRequestMatch[1]) return await listAdminPresentationRequests(request, env);
           let requestId: string;
