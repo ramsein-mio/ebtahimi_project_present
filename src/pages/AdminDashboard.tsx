@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import type { AuthUser } from '../auth';
 import { Icon } from '../icons';
 import { AdminRequests } from './AdminRequests';
-import { AdminRequests } from './AdminRequests';
 
 type Overview = {
   users: number; activeUsers: number; presentations: number; activeSessions: number;
