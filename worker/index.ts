@@ -1,6 +1,5 @@
 interface Env {
   pardis_present_db: D1Database;
-  pardis_present_uploads: R2Bucket;
 }
 
 interface UserRow {
@@ -831,7 +830,7 @@ async function deletePresentation(
 }
 
 
-type RequestAttachment = { key: string; name: string; mime: string; size: number };
+type RequestAttachment = { name: string; mime: string; size: number; data: string };
 type PresentationRequestRow = {
   id: string; user_id: string; title: string; message: string; attachments_json: string;
   status: string; admin_note: string | null; draft_json: string | null;
@@ -845,8 +844,10 @@ const REQUEST_ALLOWED_MIME = new Set([
   'text/plain','text/markdown','text/csv','application/rtf','image/png','image/jpeg','image/webp','image/gif','image/svg+xml',
   'application/octet-stream'
 ]);
-const REQUEST_MAX_FILE = 10 * 1024 * 1024;
-const REQUEST_MAX_TOTAL = 24 * 1024 * 1024;
+// Attachments are stored in D1 as base64 to avoid requiring an external object store.
+// Keep the combined payload below D1 row/request limits after base64 expansion.
+const REQUEST_MAX_FILE = 512 * 1024;
+const REQUEST_MAX_TOTAL = 900 * 1024;
 const REQUEST_MAX_FILES = 5;
 
 function safeAttachmentName(name: string): string {
@@ -874,8 +875,8 @@ async function createPresentationRequest(request: Request, env: Env): Promise<Re
   if (!message || message.length > 20000) return json({ error: 'توضیحات درخواست الزامی است و حداکثر ۲۰۰۰۰ نویسه است.' }, 400);
   const files = form.getAll('attachments').filter((entry): entry is File => entry instanceof File && entry.size > 0);
   if (files.length > REQUEST_MAX_FILES) return json({ error: 'حداکثر ۵ فایل مجاز است.' }, 400);
-  if (files.some(file => file.size > REQUEST_MAX_FILE)) return json({ error: 'حجم هر فایل باید حداکثر ۱۰ مگابایت باشد.' }, 400);
-  if (files.reduce((sum, file) => sum + file.size, 0) > REQUEST_MAX_TOTAL) return json({ error: 'حجم مجموع فایل‌ها بیش از ۲۴ مگابایت است.' }, 400);
+  if (files.some(file => file.size > REQUEST_MAX_FILE)) return json({ error: 'حجم هر فایل باید حداکثر ۵۱۲ کیلوبایت باشد.' }, 400);
+  if (files.reduce((sum, file) => sum + file.size, 0) > REQUEST_MAX_TOTAL) return json({ error: 'حجم مجموع فایل‌ها باید حداکثر ۹۰۰ کیلوبایت باشد.' }, 400);
   const id = crypto.randomUUID();
   const attachments: RequestAttachment[] = [];
   try {
@@ -885,9 +886,12 @@ async function createPresentationRequest(request: Request, env: Env): Promise<Re
       if (!allowedExtensions.has(extension)) throw new Error('پسوند فایل «' + file.name + '» پشتیبانی نمی‌شود.');
       const mime = file.type || 'application/octet-stream';
       if (!REQUEST_ALLOWED_MIME.has(mime)) throw new Error('نوع فایل «' + file.name + '» پشتیبانی نمی‌شود.');
-      const key = 'presentation-requests/' + id + '/' + crypto.randomUUID() + '/' + safeAttachmentName(file.name);
-      await env.pardis_present_uploads.put(key, file.stream(), { httpMetadata: { contentType: mime } });
-      attachments.push({ key, name: safeAttachmentName(file.name), mime, size: file.size });
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      let binary = '';
+      for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+      }
+      attachments.push({ name: safeAttachmentName(file.name), mime, size: file.size, data: btoa(binary) });
     }
     const now = new Date().toISOString();
     await env.pardis_present_db.prepare(`INSERT INTO presentation_requests
@@ -895,7 +899,6 @@ async function createPresentationRequest(request: Request, env: Env): Promise<Re
       VALUES (?,?,?,?,?,'pending',?,?)`).bind(id,user.id,title,message,JSON.stringify(attachments),now,now).run();
     return json({ ok: true, request: { id, title, status: 'pending', createdAt: now } }, 201);
   } catch (error) {
-    await Promise.all(attachments.map(item => env.pardis_present_uploads.delete(item.key).catch(() => undefined)));
     return json({ error: error instanceof Error ? error.message : 'ذخیره درخواست انجام نشد.' }, 400);
   }
 }
@@ -967,9 +970,11 @@ async function getPresentationRequestFile(request: Request, env: Env, id: string
   try { attachments = JSON.parse(row.attachments_json) as RequestAttachment[]; } catch {}
   const item = attachments[Number(indexText)];
   if (!item || !Number.isInteger(Number(indexText))) return json({ error: 'فایل پیدا نشد.' }, 404);
-  const object = await env.pardis_present_uploads.get(item.key);
-  if (!object) return json({ error: 'فایل در فضای ذخیره‌سازی پیدا نشد.' }, 404);
-  return new Response(object.body, { headers: { 'Content-Type': item.mime, 'Content-Length': String(item.size), 'Content-Disposition': 'attachment; filename="' + safeAttachmentName(item.name) + '"', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, no-store' } });
+  if (typeof item.data !== 'string') return json({ error: 'محتوای فایل در دیتابیس پیدا نشد.' }, 404);
+  const binary = atob(item.data);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Response(bytes, { headers: { 'Content-Type': item.mime, 'Content-Length': String(item.size), 'Content-Disposition': 'attachment; filename="' + safeAttachmentName(item.name) + '"', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, no-store' } });
 }
 
 export default {
