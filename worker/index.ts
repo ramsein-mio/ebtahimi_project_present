@@ -879,7 +879,10 @@ async function createPresentationRequest(request: Request, env: Env): Promise<Re
   const id = crypto.randomUUID();
   const attachments: RequestAttachment[] = [];
   try {
+    const allowedExtensions = new Set(['pdf','doc','docx','ppt','pptx','xls','xlsx','csv','txt','md','rtf','png','jpg','jpeg','webp','gif','svg']);
     for (const file of files) {
+      const extension = file.name.toLowerCase().split('.').pop() || '';
+      if (!allowedExtensions.has(extension)) throw new Error('پسوند فایل «' + file.name + '» پشتیبانی نمی‌شود.');
       const mime = file.type || 'application/octet-stream';
       if (!REQUEST_ALLOWED_MIME.has(mime)) throw new Error('نوع فایل «' + file.name + '» پشتیبانی نمی‌شود.');
       const key = 'presentation-requests/' + id + '/' + crypto.randomUUID() + '/' + safeAttachmentName(file.name);
