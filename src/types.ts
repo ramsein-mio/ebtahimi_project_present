@@ -12,7 +12,7 @@ export interface StoredPresentation {
 export type DashboardFilter = 'recent' | 'all' | 'trash';
 
 export type Route =
-  | { page: 'dashboard' }
+  | { page: 'dashboard' }\n  | { page: 'admin' }
   | { page: 'json' }
   | { page: 'editor'; id: string }
   | { page: 'viewer'; id: string };
