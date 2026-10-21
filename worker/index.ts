@@ -1,5 +1,6 @@
 interface Env {
   pardis_present_db: D1Database;
+  pardis_present_uploads: R2Bucket;
 }
 
 interface UserRow {
