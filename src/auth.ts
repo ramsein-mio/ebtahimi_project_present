@@ -4,6 +4,7 @@ export interface AuthUser {
   displayName: string;
   avatarKey: string | null;
   emailVerified: boolean;
+  role: 'user' | 'admin' | 'super_admin';
   createdAt: string;
 }
 
