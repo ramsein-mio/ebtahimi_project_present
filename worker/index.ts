@@ -409,7 +409,7 @@ async function register(
       )
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `)
-    .bind(userId, email, passwordHash, displayName, 'user', now, now)
+    .bind(userId, email, passwordHash, displayName, isSuperAdminEmail(email) ? 'super_admin' : 'user', now, now)
     .run();
 
   if ((result.meta?.changes ?? 0) === 0) {
