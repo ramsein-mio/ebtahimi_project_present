@@ -971,7 +971,8 @@ async function getPresentationRequestFile(request: Request, env: Env, id: string
   if (!object) return json({ error: 'فایل در فضای ذخیره‌سازی پیدا نشد.' }, 404);
   return new Response(object.body, { headers: { 'Content-Type': item.mime, 'Content-Length': String(item.size), 'Content-Disposition': 'attachment; filename="' + safeAttachmentName(item.name) + '"', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, no-store' } });
 }
-\nexport default {
+
+export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
