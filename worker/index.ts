@@ -409,7 +409,7 @@ async function register(
       )
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `)
-    .bind(userId, email, passwordHash, displayName, isSuperAdminEmail(email) ? 'super_admin' : 'user', now, now)
+    .bind(userId, email, passwordHash, displayName, 'user', now, now)
     .run();
 
   if ((result.meta?.changes ?? 0) === 0) {
@@ -553,6 +553,50 @@ async function logout(
   );
 }
 
+
+
+async function requireAdmin(request: Request, env: Env): Promise<SessionUserRow | null> {
+  const user = await currentUser(request, env);
+  return user && ['admin', 'super_admin'].includes(user.role) ? user : null;
+}
+async function adminOverview(request: Request, env: Env): Promise<Response> {
+  const admin = await requireAdmin(request, env);
+  if (!admin) return json({ error: 'Administrator access required.' }, 403);
+  const db = env.pardis_present_db;
+  const [users, presentations, sessions, recentUsers, recentPresentations] = await Promise.all([
+    db.prepare('SELECT COUNT(*) AS total, SUM(CASE WHEN deleted_at IS NULL THEN 1 ELSE 0 END) AS active FROM users').first<{total:number;active:number}>(),
+    db.prepare('SELECT COUNT(*) AS total FROM presentations').first<{total:number}>(),
+    db.prepare('SELECT COUNT(*) AS total FROM sessions WHERE expires_at > ?').bind(new Date().toISOString()).first<{total:number}>(),
+    db.prepare('SELECT id,email,display_name,role,created_at FROM users ORDER BY created_at DESC LIMIT 8').all(),
+    db.prepare('SELECT p.id,p.title,p.created_at,p.updated_at,u.email AS owner_email FROM presentations p JOIN users u ON u.id=p.user_id ORDER BY p.updated_at DESC LIMIT 8').all(),
+  ]);
+  return json({ok:true, overview:{users:users?.total ?? 0, activeUsers:users?.active ?? 0, presentations:presentations?.total ?? 0, activeSessions:sessions?.total ?? 0, recentUsers:recentUsers.results ?? [], recentPresentations:recentPresentations.results ?? []}});
+}
+async function adminListUsers(request: Request, env: Env): Promise<Response> {
+  const admin = await requireAdmin(request, env);
+  if (!admin) return json({ error: 'Administrator access required.' }, 403);
+  const query = (new URL(request.url).searchParams.get('q') ?? '').trim().slice(0, 100);
+  const rows = await env.pardis_present_db.prepare(`
+    SELECT u.id,u.email,u.display_name,u.role,u.email_verified_at,u.created_at,u.deleted_at,
+      (SELECT COUNT(*) FROM presentations p WHERE p.user_id=u.id) AS presentation_count
+    FROM users u WHERE (? = '' OR u.email LIKE ? OR u.display_name LIKE ?)
+    ORDER BY u.created_at DESC LIMIT 200
+  `).bind(query, `%${query}%`, `%${query}%`).all();
+  return json({ok:true, users:rows.results ?? []});
+}
+async function adminChangeRole(request: Request, env: Env, userId: string): Promise<Response> {
+  const admin = await requireAdmin(request, env);
+  if (!admin) return json({ error: 'Administrator access required.' }, 403);
+  if (admin.role !== 'super_admin') return json({ error: 'Only super admins can change roles.' }, 403);
+  const body = await readJson(request);
+  const role = body?.role;
+  if (!['user','admin'].includes(String(role))) return json({error:'Role must be user or admin.'},400);
+  const target = await env.pardis_present_db.prepare('SELECT id,email FROM users WHERE id=? AND deleted_at IS NULL').bind(userId).first<{id:string;email:string}>();
+  if (!target) return json({error:'User not found.'},404);
+  if (isSuperAdminEmail(target.email)) return json({error:'Super-admin accounts are protected.'},403);
+  await env.pardis_present_db.prepare('UPDATE users SET role=?, updated_at=? WHERE id=?').bind(role,new Date().toISOString(),userId).run();
+  return json({ok:true,userId,role});
+}
 
 const MAX_PRESENTATION_BODY_BYTES = 2 * 1024 * 1024;
 
@@ -828,7 +872,17 @@ export default {
         return json({ error: 'Origin not allowed.' }, 403);
       }
 
+
       try {
+        if (url.pathname === '/api/admin/overview' && request.method === 'GET') return await adminOverview(request, env);
+        if (url.pathname === '/api/admin/users' && request.method === 'GET') return await adminListUsers(request, env);
+        const roleMatch = url.pathname.match(/^\\/api\\/admin\\/users\\/([^/]+)\\/role$/);
+        if (roleMatch && request.method === 'PUT') {
+          let targetId: string;
+          try { targetId = decodeURIComponent(roleMatch[1]); } catch { return json({error:'Invalid user ID.'},400); }
+          return await adminChangeRole(request, env, targetId);
+        }
+
         if (
           url.pathname === '/api/presentations' &&
           request.method === 'GET'
