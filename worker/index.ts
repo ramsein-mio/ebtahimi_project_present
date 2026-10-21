@@ -876,7 +876,7 @@ export default {
       try {
         if (url.pathname === '/api/admin/overview' && request.method === 'GET') return await adminOverview(request, env);
         if (url.pathname === '/api/admin/users' && request.method === 'GET') return await adminListUsers(request, env);
-        const roleMatch = url.pathname.match(/^\\/api\\/admin\\/users\\/([^/]+)\\/role$/);
+        const roleMatch = url.pathname.match(/^\/api\/admin\/users\/([^/]+)\/role$/);
         if (roleMatch && request.method === 'PUT') {
           let targetId: string;
           try { targetId = decodeURIComponent(roleMatch[1]); } catch { return json({error:'Invalid user ID.'},400); }
