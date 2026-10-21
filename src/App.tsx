@@ -7,13 +7,15 @@ import { JsonInput } from './pages/JsonInput';
 import { EditorPage } from './pages/Editor';
 import { ViewerPage } from './ViewerPage';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { PresentationChat } from './pages/PresentationChat';
 import { getStoredPresentation } from './storage';
 import type { Route } from './types';
 
 function readRoute(): Route {
   const hash = window.location.hash.replace(/^#\/?/, '');
 
-  if (hash === 'new') return { page: 'json' };
+  if (hash === 'new') return { page: 'chat' };
+  if (hash === 'json') return { page: 'json' };
   if (hash === 'admin') return { page: 'admin' };
 
   if (hash.startsWith('editor/')) {
@@ -151,6 +153,10 @@ export default function App() {
       onEdit={(id) => navigate(`editor/${encodeURIComponent(id)}`)}
     />
   );
+
+  if (route.page === 'chat') {
+    return <PresentationChat onBack={() => navigate('dashboard')} />;
+  }
 
   if (route.page === 'json') {
     return (
