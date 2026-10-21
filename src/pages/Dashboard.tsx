@@ -101,7 +101,7 @@ export function Dashboard({
             <span>حذف‌شده‌ها</span>
           </button>
         </nav>
-        {['admin','super_admin'].includes(currentUser.role) && <button className="dashboard-nav admin-nav-link" onClick={() => { window.location.hash = 'admin'; }}><Icon name="shield" /><span>پنل مدیریت</span></button>}
+        {['admin','super_admin'].includes(currentUser.role) && <button className="dashboard-nav admin-nav-link" onClick={() => { window.location.hash = 'admin'; }}><Icon name="lock" /><span>پنل مدیریت</span></button>}
         <div className="sidebar-divider" />
         <div className="sidebar-workspace">
           <span className="workspace-icon" aria-hidden="true">
