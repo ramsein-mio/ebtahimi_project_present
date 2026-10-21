@@ -26,7 +26,7 @@ export function AdminDashboard({currentUser,onBack,onLogout}:{currentUser:AuthUs
   const [notice,setNotice]=useState('');
   async function load(){setError('');try{const data=await api<{overview:Overview}>('/api/admin/overview');setOverview(data.overview);const list=await api<{users:AdminUser[]}>('/api/admin/users');setUsers(list.users)}catch(e){setError(e instanceof Error?e.message:'بارگذاری داشبورد انجام نشد.')}} 
   useEffect(()=>{void load()},[]);
-  async function search(value:string){setQuery(value);try{const data=await api<{users:AdminUser[]}('/api/admin/users?q='+encodeURIComponent(value));setUsers(data.users)}catch(e){setError(e instanceof Error?e.message:'جست‌وجو ناموفق بود.')}}
+  async function search(value:string){setQuery(value);try{const data=await api<{users:AdminUser[]}>('/api/admin/users?q='+encodeURIComponent(value));setUsers(data.users)}catch(e){setError(e instanceof Error?e.message:'جست‌وجو ناموفق بود.')}}
   async function changeRole(user:AdminUser,role:'user'|'admin'){if(!window.confirm('نقش '+user.email+' به '+(role==='admin'?'ادمین':'کاربر عادی')+' تغییر کند؟'))return;setBusy(true);setError('');setNotice('');try{await api('/api/admin/users/'+encodeURIComponent(user.id)+'/role',{method:'PUT',body:JSON.stringify({role})});setNotice('نقش کاربر به‌روزرسانی شد.');await load()}catch(e){setError(e instanceof Error?e.message:'تغییر نقش انجام نشد.')}finally{setBusy(false)}}
   return <main className="admin-shell" dir="rtl">
     <aside className="admin-sidebar"><div className="admin-brand"><span>پ</span><div><strong>پردیس</strong><small>کنسول مدیریت</small></div></div>
