@@ -829,7 +829,145 @@ async function deletePresentation(
   return json({ ok: true });
 }
 
-export default {
+
+type RequestAttachment = { key: string; name: string; mime: string; size: number };
+type PresentationRequestRow = {
+  id: string; user_id: string; title: string; message: string; attachments_json: string;
+  status: string; admin_note: string | null; draft_json: string | null;
+  published_presentation_id: string | null; created_at: string; updated_at: string;
+  email?: string; display_name?: string;
+};
+const REQUEST_ALLOWED_MIME = new Set([
+  'application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-powerpoint','application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/plain','text/markdown','text/csv','application/rtf','image/png','image/jpeg','image/webp','image/gif','image/svg+xml',
+  'application/octet-stream'
+]);
+const REQUEST_MAX_FILE = 10 * 1024 * 1024;
+const REQUEST_MAX_TOTAL = 24 * 1024 * 1024;
+const REQUEST_MAX_FILES = 5;
+
+function safeAttachmentName(name: string): string {
+  return name.replace(/[\\/\r\n"\0]/g, '_').slice(0, 180) || 'attachment';
+}
+function serializeRequest(row: PresentationRequestRow) {
+  let attachments: RequestAttachment[] = [];
+  try { attachments = JSON.parse(row.attachments_json) as RequestAttachment[]; } catch {}
+  return {
+    id: row.id, title: row.title, message: row.message, status: row.status,
+    adminNote: row.admin_note, createdAt: row.created_at, updatedAt: row.updated_at,
+    publishedPresentationId: row.published_presentation_id,
+    attachments: attachments.map((item, index) => ({ id: String(index), name: item.name, mime: item.mime, size: item.size })),
+    ...(row.email ? { user: { email: row.email, displayName: row.display_name } } : {}),
+    ...(row.draft_json ? { draft: (() => { try { return JSON.parse(row.draft_json!); } catch { return null; } })() } : {}),
+  };
+}
+async function createPresentationRequest(request: Request, env: Env): Promise<Response> {
+  const user = await currentUser(request, env);
+  if (!user) return json({ error: 'برای ارسال درخواست ابتدا وارد حساب شوید.' }, 401);
+  const form = await request.formData();
+  const title = String(form.get('title') ?? '').trim();
+  const message = String(form.get('message') ?? '').trim();
+  if (!title || title.length > 200) return json({ error: 'عنوان باید بین ۱ تا ۲۰۰ نویسه باشد.' }, 400);
+  if (!message || message.length > 20000) return json({ error: 'توضیحات درخواست الزامی است و حداکثر ۲۰۰۰۰ نویسه است.' }, 400);
+  const files = form.getAll('attachments').filter((entry): entry is File => entry instanceof File && entry.size > 0);
+  if (files.length > REQUEST_MAX_FILES) return json({ error: 'حداکثر ۵ فایل مجاز است.' }, 400);
+  if (files.some(file => file.size > REQUEST_MAX_FILE)) return json({ error: 'حجم هر فایل باید حداکثر ۱۰ مگابایت باشد.' }, 400);
+  if (files.reduce((sum, file) => sum + file.size, 0) > REQUEST_MAX_TOTAL) return json({ error: 'حجم مجموع فایل‌ها بیش از ۲۴ مگابایت است.' }, 400);
+  const id = crypto.randomUUID();
+  const attachments: RequestAttachment[] = [];
+  try {
+    for (const file of files) {
+      const mime = file.type || 'application/octet-stream';
+      if (!REQUEST_ALLOWED_MIME.has(mime)) throw new Error('نوع فایل «' + file.name + '» پشتیبانی نمی‌شود.');
+      const key = 'presentation-requests/' + id + '/' + crypto.randomUUID() + '/' + safeAttachmentName(file.name);
+      await env.pardis_present_uploads.put(key, file.stream(), { httpMetadata: { contentType: mime } });
+      attachments.push({ key, name: safeAttachmentName(file.name), mime, size: file.size });
+    }
+    const now = new Date().toISOString();
+    await env.pardis_present_db.prepare(`INSERT INTO presentation_requests
+      (id,user_id,title,message,attachments_json,status,created_at,updated_at)
+      VALUES (?,?,?,?,?,'pending',?,?)`).bind(id,user.id,title,message,JSON.stringify(attachments),now,now).run();
+    return json({ ok: true, request: { id, title, status: 'pending', createdAt: now } }, 201);
+  } catch (error) {
+    await Promise.all(attachments.map(item => env.pardis_present_uploads.delete(item.key).catch(() => undefined)));
+    return json({ error: error instanceof Error ? error.message : 'ذخیره درخواست انجام نشد.' }, 400);
+  }
+}
+async function listUserPresentationRequests(request: Request, env: Env): Promise<Response> {
+  const user = await currentUser(request, env);
+  if (!user) return json({ error: 'Not authenticated.' }, 401);
+  const result = await env.pardis_present_db.prepare(`SELECT * FROM presentation_requests WHERE user_id=? ORDER BY created_at DESC LIMIT 100`).bind(user.id).all<PresentationRequestRow>();
+  return json({ ok: true, requests: (result.results ?? []).map(serializeRequest) });
+}
+async function listAdminPresentationRequests(request: Request, env: Env): Promise<Response> {
+  const admin = await requireAdmin(request, env);
+  if (!admin) return json({ error: 'Administrator access required.' }, 403);
+  const status = new URL(request.url).searchParams.get('status') || '';
+  const valid = ['pending','in_review','approved','rejected'];
+  const result = status && valid.includes(status)
+    ? await env.pardis_present_db.prepare(`SELECT r.*,u.email,u.display_name FROM presentation_requests r JOIN users u ON u.id=r.user_id WHERE r.status=? ORDER BY r.created_at DESC LIMIT 200`).bind(status).all<PresentationRequestRow>()
+    : await env.pardis_present_db.prepare(`SELECT r.*,u.email,u.display_name FROM presentation_requests r JOIN users u ON u.id=r.user_id ORDER BY CASE r.status WHEN 'pending' THEN 0 WHEN 'in_review' THEN 1 ELSE 2 END, r.created_at DESC LIMIT 200`).all<PresentationRequestRow>();
+  return json({ ok: true, requests: (result.results ?? []).map(serializeRequest) });
+}
+async function getAdminPresentationRequest(request: Request, env: Env, id: string): Promise<Response> {
+  const admin = await requireAdmin(request, env);
+  if (!admin) return json({ error: 'Administrator access required.' }, 403);
+  const row = await env.pardis_present_db.prepare(`SELECT r.*,u.email,u.display_name FROM presentation_requests r JOIN users u ON u.id=r.user_id WHERE r.id=? LIMIT 1`).bind(id).first<PresentationRequestRow>();
+  if (!row) return json({ error: 'درخواست پیدا نشد.' }, 404);
+  return json({ ok: true, request: serializeRequest(row) });
+}
+async function updateAdminPresentationRequest(request: Request, env: Env, id: string): Promise<Response> {
+  const admin = await requireAdmin(request, env);
+  if (!admin) return json({ error: 'Administrator access required.' }, 403);
+  const body = await readJson(request, MAX_PRESENTATION_BODY_BYTES);
+  if (!body) return json({ error: 'درخواست JSON معتبر نیست.' }, 400);
+  const row = await env.pardis_present_db.prepare('SELECT * FROM presentation_requests WHERE id=? LIMIT 1').bind(id).first<PresentationRequestRow>();
+  if (!row) return json({ error: 'درخواست پیدا نشد.' }, 404);
+  const status = typeof body.status === 'string' ? body.status : row.status;
+  if (!['pending','in_review','approved','rejected'].includes(status)) return json({ error: 'وضعیت درخواست معتبر نیست.' }, 400);
+  const note = typeof body.adminNote === 'string' ? body.adminNote.slice(0,5000) : row.admin_note;
+  let draft = row.draft_json;
+  if (body.presentation !== undefined) {
+    if (!presentationObject(body.presentation)) return json({ error: 'ارائه باید شامل آرایه slides باشد.' }, 400);
+    draft = JSON.stringify(body.presentation);
+  }
+  let publishedId = row.published_presentation_id;
+  const now = new Date().toISOString();
+  if (status === 'approved') {
+    if (!draft) return json({ error: 'برای انتشار ابتدا JSON/YAML معتبر وارد کنید.' }, 400);
+    let presentation: unknown;
+    try { presentation = JSON.parse(draft); } catch { return json({ error: 'پیش‌نویس JSON معتبر نیست.' }, 400); }
+    if (!presentationObject(presentation)) return json({ error: 'پیش‌نویس ارائه معتبر نیست.' }, 400);
+    if (!publishedId) {
+      publishedId = crypto.randomUUID();
+      await env.pardis_present_db.prepare(`INSERT INTO presentations(id,user_id,title,content_json,created_at,updated_at,visibility)
+        VALUES(?,?,?,?,?,?,'private')`).bind(publishedId,row.user_id,row.title,JSON.stringify(presentation),now,now).run();
+    } else {
+      await env.pardis_present_db.prepare('UPDATE presentations SET title=?,content_json=?,updated_at=? WHERE id=? AND user_id=?').bind(row.title,JSON.stringify(presentation),now,publishedId,row.user_id).run();
+    }
+  }
+  await env.pardis_present_db.prepare('UPDATE presentation_requests SET status=?,admin_note=?,draft_json=?,published_presentation_id=?,updated_at=? WHERE id=?')
+    .bind(status,note,draft,publishedId,now,id).run();
+  return json({ ok: true, requestId: id, status, publishedPresentationId: publishedId });
+}
+async function getPresentationRequestFile(request: Request, env: Env, id: string, indexText: string): Promise<Response> {
+  const user = await currentUser(request, env);
+  if (!user) return json({ error: 'Not authenticated.' }, 401);
+  const row = await env.pardis_present_db.prepare('SELECT * FROM presentation_requests WHERE id=? LIMIT 1').bind(id).first<PresentationRequestRow>();
+  if (!row) return json({ error: 'فایل پیدا نشد.' }, 404);
+  const admin = ['admin','super_admin'].includes(user.role);
+  if (!admin && row.user_id !== user.id) return json({ error: 'Access denied.' }, 403);
+  let attachments: RequestAttachment[] = [];
+  try { attachments = JSON.parse(row.attachments_json) as RequestAttachment[]; } catch {}
+  const item = attachments[Number(indexText)];
+  if (!item || !Number.isInteger(Number(indexText))) return json({ error: 'فایل پیدا نشد.' }, 404);
+  const object = await env.pardis_present_uploads.get(item.key);
+  if (!object) return json({ error: 'فایل در فضای ذخیره‌سازی پیدا نشد.' }, 404);
+  return new Response(object.body, { headers: { 'Content-Type': item.mime, 'Content-Length': String(item.size), 'Content-Disposition': 'attachment; filename="' + safeAttachmentName(item.name) + '"', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, no-store' } });
+}
+\nexport default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
@@ -874,6 +1012,26 @@ export default {
 
 
       try {
+        if (url.pathname === '/api/presentation-requests' && request.method === 'POST') return await createPresentationRequest(request, env);
+        if (url.pathname === '/api/presentation-requests' && request.method === 'GET') return await listUserPresentationRequests(request, env);
+        const requestFileMatch = url.pathname.match(/^\\/api\\/presentation-requests\\/([^/]+)\\/files\\/([^/]+)$/);
+        if (requestFileMatch && request.method === 'GET') {
+          let requestId: string;
+          try { requestId = decodeURIComponent(requestFileMatch[1]); } catch { return json({ error: 'Invalid request ID.' }, 400); }
+          return await getPresentationRequestFile(request, env, requestId, requestFileMatch[2]);
+        }
+        const adminRequestMatch = url.pathname.match(/^\\/api\\/admin\\/presentation-requests(?:\\/([^/]+))?$/);
+        if (adminRequestMatch && request.method === 'GET') {
+          if (!adminRequestMatch[1]) return await listAdminPresentationRequests(request, env);
+          let requestId: string;
+          try { requestId = decodeURIComponent(adminRequestMatch[1]); } catch { return json({ error: 'Invalid request ID.' }, 400); }
+          return await getAdminPresentationRequest(request, env, requestId);
+        }
+        if (adminRequestMatch && adminRequestMatch[1] && request.method === 'PUT') {
+          let requestId: string;
+          try { requestId = decodeURIComponent(adminRequestMatch[1]); } catch { return json({ error: 'Invalid request ID.' }, 400); }
+          return await updateAdminPresentationRequest(request, env, requestId);
+        }
         if (url.pathname === '/api/admin/overview' && request.method === 'GET') return await adminOverview(request, env);
         if (url.pathname === '/api/admin/users' && request.method === 'GET') return await adminListUsers(request, env);
         const roleMatch = url.pathname.match(/^\/api\/admin\/users\/([^/]+)\/role$/);
