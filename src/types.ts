@@ -15,6 +15,7 @@ export type Route =
   | { page: 'dashboard' }
   | { page: 'admin' }
   | { page: 'json' }
+  | { page: 'chat' }
   | { page: 'editor'; id: string }
   | { page: 'viewer'; id: string };
 

@@ -7,13 +7,15 @@ import { JsonInput } from './pages/JsonInput';
 import { EditorPage } from './pages/Editor';
 import { ViewerPage } from './ViewerPage';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { PresentationChat } from './pages/PresentationChat';
 import { getStoredPresentation } from './storage';
-import type { Route } from './types';
+import type { Route, StoredPresentation } from './types';
 
 function readRoute(): Route {
   const hash = window.location.hash.replace(/^#\/?/, '');
 
-  if (hash === 'new') return { page: 'json' };
+  if (hash === 'new') return { page: 'chat' };
+  if (hash === 'json') return { page: 'json' };
   if (hash === 'admin') return { page: 'admin' };
 
   if (hash.startsWith('editor/')) {
@@ -45,6 +47,8 @@ export default function App() {
   const [authStatus, setAuthStatus] = useState<AuthStatus>('checking');
   const [authError, setAuthError] = useState('');
   const [logoutBusy, setLogoutBusy] = useState(false);
+  const [remotePresentation, setRemotePresentation] = useState<StoredPresentation | null>(null);
+  const [remoteViewerLoading, setRemoteViewerLoading] = useState(false);
 
   const checkSession = useCallback(async () => {
     setAuthStatus('checking');
@@ -77,6 +81,24 @@ export default function App() {
 
     return () => window.removeEventListener('hashchange', update);
   }, [checkSession]);
+
+  useEffect(() => {
+    if (route.page !== 'viewer') {
+      setRemotePresentation(null);
+      setRemoteViewerLoading(false);
+      return;
+    }
+    const id = route.id;
+    setRemoteViewerLoading(true);
+    fetch('/api/presentations/' + encodeURIComponent(id), { credentials: 'same-origin' })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Presentation not found');
+        return await response.json() as { presentation: StoredPresentation };
+      })
+      .then((data) => setRemotePresentation(data.presentation))
+      .catch(() => setRemotePresentation(null))
+      .finally(() => setRemoteViewerLoading(false));
+  }, [route]);
 
   const handleLogout = async () => {
     if (logoutBusy) return;
@@ -152,6 +174,10 @@ export default function App() {
     />
   );
 
+  if (route.page === 'chat') {
+    return <PresentationChat onBack={() => navigate('dashboard')} />;
+  }
+
   if (route.page === 'json') {
     return (
       <JsonInput
@@ -172,9 +198,9 @@ export default function App() {
   }
 
   if (route.page === 'viewer') {
-    const record = getStoredPresentation(route.id);
+    const record = getStoredPresentation(route.id) ?? (remotePresentation?.id === route.id ? remotePresentation : null);
 
-    if (!record) return dashboard;
+    if (!record) return remoteViewerLoading ? <main className="auth-status-page" dir="rtl"><BrandLoading/><p>در حال بارگذاری ارائه...</p></main> : dashboard;
 
     return (
       <ViewerPage

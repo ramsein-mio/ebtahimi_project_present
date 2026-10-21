@@ -9,7 +9,8 @@ type IconName =
   | 'alignLeft' | 'alignCenter' | 'alignRight' | 'alignMiddle' | 'bringFront' | 'sendBack'
   | 'font' | 'table' | 'chart' | 'chartBar' | 'chartLine' | 'chartPie' | 'chartDonut' | 'chartArea'
   | 'rowAdd' | 'rowDelete' | 'columnAdd' | 'columnDelete' | 'cut' | 'copy' | 'paste'
-  | 'lock' | 'unlock' | 'crop' | 'background' | 'fit' | 'layout' | 'properties';
+  | 'lock' | 'unlock' | 'crop' | 'background' | 'fit' | 'layout' | 'properties'
+  | 'sparkles' | 'file-text' | 'check-circle' | 'paperclip' | 'inbox' | 'download';
 
 const paths: Record<IconName, ReactNode> = {
   home: <><path d="m3 11 9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/></>,
@@ -76,6 +77,12 @@ const paths: Record<IconName, ReactNode> = {
   fit: <><path d="M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6"/><path d="M8 12h8"/></>,
   layout: <><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M10 10v10"/></>,
   properties: <><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></>,
+  sparkles: <><path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="m19 14 .9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9z"/></>,
+  'file-text': <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></>,
+  'check-circle': <><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/></>,
+  paperclip: <path d="m8 12.5 6.8-6.8a3.5 3.5 0 0 1 5 5l-8.5 8.5a5 5 0 0 1-7.1-7.1l8.2-8.2"/>,
+  inbox: <><path d="M4 4h16l2 11v4H2v-4z"/><path d="M2 14h6l2 3h4l2-3h6"/></>,
+  download: <><path d="M12 3v12m-5-5 5 5 5-5"/><path d="M5 17v4h14v-4"/></>,
 };
 
 export function Icon({ name, size = 20, ...props }: { name: IconName; size?: number } & SVGProps<SVGSVGElement>) {

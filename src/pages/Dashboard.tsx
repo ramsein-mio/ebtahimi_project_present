@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { DashboardFilter, StoredPresentation } from '../types';
 import type { AuthUser } from '../auth';
 import { faNumber, faRelativeDate } from '../persian';
@@ -40,7 +40,18 @@ export function Dashboard({
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }, [filter, items, query]);
 
-  const refresh = () => setItems(loadPresentations());
+  const refresh = async () => {
+    const local = loadPresentations();
+    try {
+      const response = await fetch('/api/presentations', { credentials: 'same-origin' });
+      if (!response.ok) throw new Error('Could not load saved presentations');
+      const data = await response.json() as { presentations?: StoredPresentation[] };
+      const remote = data.presentations ?? [];
+      const remoteIds = new Set(remote.map((item) => item.id));
+      setItems([...remote, ...local.filter((item) => !remoteIds.has(item.id))]);
+    } catch { setItems(local); }
+  };
+  useEffect(() => { void refresh(); }, []);
 
   const moveToTrash = (item: StoredPresentation) => {
     updateStoredPresentation(item.id, { deletedAt: new Date().toISOString() });
@@ -117,9 +128,9 @@ export function Dashboard({
           خروج از حساب
         </button>
         <div className="storage-note">
-          <span>ذخیره‌سازی محلی</span>
+          <span>ذخیره‌سازی حساب کاربری</span>
           <div><i /></div>
-          <small>داده‌ها از دستگاه شما خارج نمی‌شوند.</small>
+          <small>ارائه‌های تأییدشده از سرور حساب شما بارگذاری می‌شوند.</small>
         </div>
       </aside>
 
