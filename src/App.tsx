@@ -6,13 +6,14 @@ import { Dashboard } from './pages/Dashboard';
 import { JsonInput } from './pages/JsonInput';
 import { EditorPage } from './pages/Editor';
 import { ViewerPage } from './ViewerPage';
+import { AdminDashboard } from './pages/AdminDashboard';
 import { getStoredPresentation } from './storage';
 import type { Route } from './types';
 
 function readRoute(): Route {
   const hash = window.location.hash.replace(/^#\/?/, '');
 
-  if (hash === 'new') return { page: 'json' };
+  if (hash === 'new') return { page: 'json' };\n  if (hash === 'admin') return { page: 'admin' };
 
   if (hash.startsWith('editor/')) {
     return {
@@ -130,6 +131,14 @@ export default function App() {
         }}
       />
     );
+  }
+
+  if (route.page === 'admin') {
+    if (!['admin', 'super_admin'].includes(user.role)) {
+      navigate('dashboard');
+      return <Dashboard currentUser={user} onLogout={() => void handleLogout()} onCreate={() => navigate('new')} onOpen={(id) => navigate(`viewer/${encodeURIComponent(id)}`)} onEdit={(id) => navigate(`editor/${encodeURIComponent(id)}`)} />;
+    }
+    return <AdminDashboard currentUser={user} onBack={() => navigate('dashboard')} onLogout={() => void handleLogout()} />;
   }
 
   const dashboard = (
