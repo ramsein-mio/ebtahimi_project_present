@@ -1742,7 +1742,7 @@ button.resize-handle { pointer-events: auto; cursor: nwse-resize; }
   .editor-workspace { display: block; width: 100%; height: calc(100dvh - 104px); min-height: 0; overflow: hidden; }
   .editor-center { width: 100%; height: 100%; min-width: 0; min-height: 0; }
   .editor-stage-viewport { width: 100%; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
-  .editor-stage-pad { min-width: 100%; width: max-content; min-height: 100%; padding: 20px 14px; place-items: center; }
+  .editor-stage-pad { width: 100%; min-width: 100%; min-height: 100%; padding: 20px 14px; display: grid; place-items: center; box-sizing: border-box; }
   .slide-canvas { min-width: 0; flex: 0 0 auto; }
   .canvas-status-bar { min-height: 28px; gap: 8px; font-size: 9px; }
   .slide-navigator { position: fixed; z-index: 120; top: 104px; bottom: 0; left: 0; width: min(250px, 82vw); max-height: none; transform: translateX(-105%); padding-bottom: env(safe-area-inset-bottom); }
