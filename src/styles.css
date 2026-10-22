@@ -1784,6 +1784,36 @@ button.resize-handle { pointer-events: auto; cursor: nwse-resize; }
   .viewer-qr-canvas-wrap canvas { width: min(240px, 62vw); }
 }
 
+
+/* Landscape phones: reserve real space for the bottom controls/system gesture area.
+   Keep the slide inside the remaining stage instead of letting it extend beneath navigation. */
+@media (max-width: 680px) and (orientation: landscape) {
+  .viewer-root { height: 100dvh; height: 100svh; }
+  .viewer-topbar { min-height: 0; padding: max(3px, env(safe-area-inset-top)) 8px 3px; gap: 5px; }
+  .viewer-brand { min-height: 20px; }
+  .viewer-brand-text { font-size: 10px; }
+  .viewer-tools { gap: 3px; padding-bottom: 0; }
+  .viewer-btn { flex-basis: 30px; min-width: 30px; width: 30px; height: 28px; }
+  .viewer-btn svg { width: 15px; height: 15px; }
+  .viewer-zoomtag { flex-basis: 32px; min-width: 32px; font-size: 9px; }
+  .viewer-stage { flex: 1 1 0; min-height: 0; }
+  .viewer-viewport { inset: 2px 0; }
+  .viewer-bottombar {
+    flex: 0 0 auto;
+    min-height: 0;
+    gap: 5px;
+    padding: 4px 8px max(4px, env(safe-area-inset-bottom));
+  }
+  .viewer-nav-btn { width: 32px; min-width: 32px; height: 30px; padding: 0 5px; }
+  .viewer-center { gap: 3px; min-width: 0; }
+  .viewer-meta { font-size: 9px; }
+  .editor-shell { height: 100dvh; height: 100svh; }
+  .editor-workspace { height: calc(100svh - 104px); }
+  .editor-stage-pad { padding: 6px 8px max(10px, env(safe-area-inset-bottom)); }
+  .slide-navigator { bottom: env(safe-area-inset-bottom); }
+  .editor-properties { bottom: env(safe-area-inset-bottom); }
+}
+
 @media (max-width: 380px) {
   .dashboard-heading h1 { font-size: 19px; }
   .json-header .back-button { font-size: 10px; padding-inline: 7px; }
