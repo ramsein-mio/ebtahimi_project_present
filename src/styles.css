@@ -1800,8 +1800,23 @@ button.resize-handle { pointer-events: auto; cursor: nwse-resize; }
   .viewer-bottombar { padding-block: 5px; }
   .editor-app-header { height: 50px; min-height: 50px; }
   .editor-format-toolbar { height: 40px; min-height: 40px; }
-  .editor-workspace { height: calc(100dvh - 90px); }
-  .slide-navigator, .editor-properties { top: 90px; }
+  /*
+   * In phone landscape, 100dvh can extend behind the Android gesture /
+   * navigation area. Reserve a real bottom strip instead of relying only
+   * on safe-area-inset-bottom (which can be zero in mobile browsers).
+   */
+  .editor-workspace {
+    height: calc(100dvh - 90px - 28px - env(safe-area-inset-bottom, 0px));
+    padding-bottom: 0;
+    box-sizing: border-box;
+  }
+  .editor-center { min-height: 0; }
+  .editor-stage-viewport { padding-bottom: 0; box-sizing: border-box; }
+  .editor-stage-pad { padding-bottom: 8px; }
+  .slide-navigator, .editor-properties {
+    top: 90px;
+    bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 
