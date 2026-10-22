@@ -149,12 +149,17 @@ export function Viewer({ presentation, title, initialIndex = 0, onBack, onEdit }
     if (!stage) return;
     const compute = () => {
       const rect = stage.getBoundingClientRect();
+      // The stage is the space BETWEEN the header and the bottom navigation.
+      // Never enforce a 0.2 minimum: on short landscape screens that minimum
+      // can make a 16:9 slide taller than the stage and push it under the footer.
+      const availableWidth = Math.max(1, rect.width - 24);
+      const availableHeight = Math.max(1, rect.height - 24);
       const scale = Math.min(
-        (rect.width - 48) / presentation.width,
-        (rect.height - 48) / presentation.height,
+        availableWidth / presentation.width,
+        availableHeight / presentation.height,
       );
-      setFitScale(Math.max(0.2, Math.min(scale, 1.5)));
-      // Recenter the landscape slide after viewport/orientation changes on mobile.
+      setFitScale(Math.max(0.01, Math.min(scale, 1.5)));
+      // Recenter and refit after viewport/orientation changes on mobile.
       setPan({ x: 0, y: 0 });
     };
     compute();
