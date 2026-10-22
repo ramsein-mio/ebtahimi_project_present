@@ -10,7 +10,7 @@ type IconName =
   | 'font' | 'table' | 'chart' | 'chartBar' | 'chartLine' | 'chartPie' | 'chartDonut' | 'chartArea'
   | 'rowAdd' | 'rowDelete' | 'columnAdd' | 'columnDelete' | 'cut' | 'copy' | 'paste'
   | 'lock' | 'unlock' | 'crop' | 'background' | 'fit' | 'layout' | 'properties'
-  | 'sparkles' | 'file-text' | 'check-circle' | 'paperclip' | 'inbox' | 'download';
+  | 'sparkles' | 'file-text' | 'check-circle' | 'paperclip' | 'inbox' | 'download' | 'hand';
 
 const paths: Record<IconName, ReactNode> = {
   home: <><path d="m3 11 9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/></>,
@@ -43,6 +43,7 @@ const paths: Record<IconName, ReactNode> = {
   warning: <><path d="M12 3 2 21h20z"/><path d="M12 9v5M12 18h.01"/></>,
   layers: <><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 12 9 5 9-5M3 16l9 5 9-5"/></>,
   pointer: <path d="m5 3 13 9-6 1 3 6-2.5 1.2-3-6L5 18z"/>,
+  hand: <><path d="M8 12V5a1.5 1.5 0 0 1 3 0v6-7a1.5 1.5 0 0 1 3 0v7-5a1.5 1.5 0 0 1 3 0v7-3a1.5 1.5 0 0 1 3 0v6c0 4-2.5 7-6.5 7h-1c-2 0-3.2-.8-4.5-2.3L4 16a1.5 1.5 0 0 1 2.2-2z"/></>
   image: <><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m4 17 5-5 4 4 2-2 5 5"/></>,
   shape: <><rect x="4" y="4" width="10" height="10" rx="2"/><circle cx="16" cy="16" r="5"/></>,
   line: <path d="M4 19 20 5"/>,
