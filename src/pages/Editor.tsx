@@ -830,11 +830,15 @@ export function EditorPage({ id, onBack, onPresent }: EditorProps) {
   const fitToScreen = useCallback(() => {
     if (!projected || !stageViewportRef.current) return;
     const viewport = stageViewportRef.current;
-    const availableWidth = Math.max(1, viewport.clientWidth - 32);
-    const availableHeight = Math.max(1, viewport.clientHeight - 32);
+    // Measure the actual canvas viewport (not the full editor, toolbar, or notes).
+    // In landscape mode the available height can change dramatically when browser
+    // chrome and the mobile toolbar resize.
+    const availableWidth = Math.max(1, viewport.clientWidth - 24);
+    const availableHeight = Math.max(1, viewport.clientHeight - 24);
     const next = clamp(Math.min(availableWidth / projected.width, availableHeight / projected.height), .1, 1.5);
     setZoom(Math.round(next * 1000) / 1000);
     setCanvasPan({ x: 0, y: 0 });
+    viewport.scrollTo({ left: 0, top: 0, behavior: 'auto' });
   }, [projected]);
 
   useEffect(() => {
@@ -1521,6 +1525,8 @@ export function EditorPage({ id, onBack, onPresent }: EditorProps) {
               } else {
                 setZoomMode('manual');
                 setZoom(Number(event.target.value) / 100);
+                setCanvasPan({ x: 0, y: 0 });
+                stageViewportRef.current?.scrollTo({ left: 0, top: 0, behavior: 'auto' });
               }
             }}
           >
@@ -1673,7 +1679,9 @@ export function EditorPage({ id, onBack, onPresent }: EditorProps) {
                   transform: `translate(${canvasPan.x}px, ${canvasPan.y}px)`,
                 }}
                 onPointerDown={(event) => {
-                  if (panMode) { event.preventDefault(); event.stopPropagation(); return; }
+                  // Let the viewport receive this pointer event so panning also
+                  // works when the gesture starts directly on the slide.
+                  if (panMode) { event.preventDefault(); return; }
                   if (event.target === event.currentTarget) setSelectedElementId(null);
                 }}
               >
