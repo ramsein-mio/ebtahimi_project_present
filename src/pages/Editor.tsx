@@ -647,6 +647,9 @@ export function EditorPage({ id, onBack, onPresent }: EditorProps) {
   const [notesOpen, setNotesOpen] = useState(true);
   const [zoom, setZoom] = useState(.72);
   const [zoomMode, setZoomMode] = useState<'fit' | 'manual'>('fit');
+  const [panMode, setPanMode] = useState(false);
+  const [canvasPan, setCanvasPan] = useState({ x: 0, y: 0 });
+  const panGestureRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number } | null>(null);
   const [title, setTitle] = useState(record?.title ?? '');
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [toast, setToast] = useState<string | null>(null);
@@ -827,12 +830,11 @@ export function EditorPage({ id, onBack, onPresent }: EditorProps) {
   const fitToScreen = useCallback(() => {
     if (!projected || !stageViewportRef.current) return;
     const viewport = stageViewportRef.current;
-    const next = clamp(
-      Math.min((viewport.clientWidth - 96) / projected.width, (viewport.clientHeight - 82) / projected.height),
-      .25,
-      1.5,
-    );
-    setZoom(Math.round(next * 100) / 100);
+    const availableWidth = Math.max(1, viewport.clientWidth - 32);
+    const availableHeight = Math.max(1, viewport.clientHeight - 32);
+    const next = clamp(Math.min(availableWidth / projected.width, availableHeight / projected.height), .1, 1.5);
+    setZoom(Math.round(next * 1000) / 1000);
+    setCanvasPan({ x: 0, y: 0 });
   }, [projected]);
 
   useEffect(() => {
@@ -1531,7 +1533,8 @@ export function EditorPage({ id, onBack, onPresent }: EditorProps) {
           </select>
         </div>
         <div className="toolbar-group">
-          <ToolButton label="Select" icon="pointer" active onClick={() => setSelectedElementId(null)} />
+          <ToolButton label="Select" icon="pointer" active={!panMode} onClick={() => { setPanMode(false); panGestureRef.current = null; setSelectedElementId(null); }} />
+          <ToolButton label="Pan canvas" icon="hand" active={panMode} onClick={() => { setPanMode((value) => !value); panGestureRef.current = null; }} />
           <ToolButton label="Text box" icon="text" onClick={addTextBox} />
           <div className="toolbar-popover-wrap" onPointerDown={(event) => event.stopPropagation()}>
             <ToolButton label="Shape" icon="shape" active={shapeMenuOpen} onClick={() => setShapeMenuOpen((value) => !value)} />
@@ -1639,9 +1642,26 @@ export function EditorPage({ id, onBack, onPresent }: EditorProps) {
             <span>Slide {slideIndex + 1} of {projected.slides.length}</span>
             <span>{Math.round(zoom * 100)}%</span>
           </div>
-          <div className="editor-stage-viewport" ref={stageViewportRef} onPointerDown={(event) => {
-            if (event.target === event.currentTarget) setSelectedElementId(null);
-          }}>
+          <div
+            className={`editor-stage-viewport ${panMode ? 'pan-mode' : ''}`}
+            ref={stageViewportRef}
+            onPointerDown={(event) => {
+              if (panMode) {
+                event.preventDefault(); event.stopPropagation();
+                panGestureRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, originX: canvasPan.x, originY: canvasPan.y };
+                event.currentTarget.setPointerCapture(event.pointerId); return;
+              }
+              if (event.target === event.currentTarget) setSelectedElementId(null);
+            }}
+            onPointerMove={(event) => {
+              const drag = panGestureRef.current;
+              if (!drag || drag.pointerId !== event.pointerId) return;
+              setCanvasPan({ x: drag.originX + event.clientX - drag.startX, y: drag.originY + event.clientY - drag.startY });
+            }}
+            onPointerUp={(event) => { if (panGestureRef.current?.pointerId === event.pointerId) panGestureRef.current = null; }}
+            onPointerCancel={() => { panGestureRef.current = null; }}
+            onLostPointerCapture={() => { panGestureRef.current = null; }}
+          >
             <div className="editor-stage-pad">
               <div
                 className="slide-canvas"
@@ -1650,8 +1670,10 @@ export function EditorPage({ id, onBack, onPresent }: EditorProps) {
                   width: `${projected.width * zoom}px`,
                   height: `${projected.height * zoom}px`,
                   aspectRatio: `${projected.width}/${projected.height}`,
+                  transform: `translate(${canvasPan.x}px, ${canvasPan.y}px)`,
                 }}
                 onPointerDown={(event) => {
+                  if (panMode) { event.preventDefault(); event.stopPropagation(); return; }
                   if (event.target === event.currentTarget) setSelectedElementId(null);
                 }}
               >
