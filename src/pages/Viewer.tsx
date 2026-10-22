@@ -154,6 +154,8 @@ export function Viewer({ presentation, title, initialIndex = 0, onBack, onEdit }
         (rect.height - 48) / presentation.height,
       );
       setFitScale(Math.max(0.2, Math.min(scale, 1.5)));
+      // Keep the slide centered after mobile browser chrome or orientation changes.
+      setPan({ x: 0, y: 0 });
     };
     compute();
     const observer = new ResizeObserver(compute);
