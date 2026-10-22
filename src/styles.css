@@ -2014,9 +2014,11 @@ button.resize-handle { pointer-events: auto; cursor: nwse-resize; }
 @media (max-height: 520px) and (max-width: 900px) {
   .editor-app-header { height: 50px; min-height: 50px; }
   .editor-format-toolbar { position: relative; top: auto; height: 40px; min-height: 40px; max-height: 40px; }
-  .editor-workspace { height: calc(100dvh - 90px); min-height: 0; overflow: hidden; }
+  /* Account for the mobile browser/system safe area in landscape. */
+  .editor-workspace { height: calc(100dvh - 90px - env(safe-area-inset-bottom, 0px)); min-height: 0; overflow: hidden; }
   .editor-center { height: 100%; min-height: 0; grid-template-rows: 26px minmax(0, 1fr) auto; }
-  .editor-stage-viewport { height: 100%; min-height: 0; overflow: auto; }
-  .editor-stage-pad { min-height: 100%; padding: 8px; place-items: center; }
-  .slide-navigator, .editor-properties { top: 90px; }
+  .editor-stage-viewport { width: 100%; height: 100%; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+  .editor-stage-pad { width: 100%; min-width: 100%; min-height: 100%; padding: 8px; place-items: center; }
+  .slide-canvas { min-width: 0; max-width: none; transition: none; }
+  .slide-navigator, .editor-properties { top: 90px; bottom: env(safe-area-inset-bottom, 0px); }
 }
